@@ -1,5 +1,6 @@
 import SwiftUI
 import VibeTypeCore
+import KeyboardShortcuts
 
 struct SettingsView: View {
     @Environment(AppState.self) private var state
@@ -11,12 +12,54 @@ struct SettingsView: View {
                     Label("모델", systemImage: "cpu")
                 }
 
+            shortcutsTab
+                .tabItem {
+                    Label("단축키", systemImage: "command")
+                }
+
             aboutTab
                 .tabItem {
                     Label("정보", systemImage: "info.circle")
                 }
         }
         .padding()
+    }
+
+    private var shortcutsTab: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("글로벌 단축키")
+                .font(.headline)
+            Text("어떤 앱에서든 텍스트를 선택한 뒤 아래 단축키를 누르면 그 자리에서 결과가 교체됩니다.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            Form {
+                ForEach(TextAction.allCases, id: \.self) { action in
+                    KeyboardShortcuts.Recorder(action.displayNameKo, name: HotkeyManager.shortcutName(for: action))
+                }
+            }
+            Spacer()
+
+            Group {
+                if AccessibilityService.hasPermission {
+                    Label("Accessibility 권한 허용됨", systemImage: "checkmark.circle.fill")
+                        .foregroundStyle(.green)
+                } else {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Label("Accessibility 권한 필요", systemImage: "exclamationmark.triangle.fill")
+                            .foregroundStyle(.orange)
+                        Button("System Settings 열기") {
+                            AccessibilityService.requestPermissionIfNeeded()
+                            if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
+                                NSWorkspace.shared.open(url)
+                            }
+                        }
+                    }
+                }
+            }
+            .font(.callout)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private var modelTab: some View {

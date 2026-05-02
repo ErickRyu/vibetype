@@ -23,6 +23,9 @@ settings:
 packages:
   VibeTypeCore:
     path: ../..
+  KeyboardShortcuts:
+    url: https://github.com/sindresorhus/KeyboardShortcuts
+    from: 2.2.0
 
 targets:
   VibeTypeMac:
@@ -35,6 +38,8 @@ targets:
     dependencies:
       - package: VibeTypeCore
         product: VibeTypeCore
+      - package: KeyboardShortcuts
+        product: KeyboardShortcuts
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.vibetype.mac

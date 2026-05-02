@@ -13,6 +13,8 @@ enum ModelLoadState: Equatable, Sendable {
 @MainActor
 @Observable
 final class AppState {
+    static let shared = AppState()
+
     var selectedModelID: String = VibeTypeModelRegistry.default.id {
         didSet { UserDefaults.standard.set(selectedModelID, forKey: Self.modelKey) }
     }

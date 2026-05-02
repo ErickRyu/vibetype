@@ -3,14 +3,13 @@ import AppKit
 
 @main
 struct VibeTypeMacApp: App {
-    @State private var appState = AppState()
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
 
     var body: some Scene {
         Settings {
             SettingsView()
-                .environment(appState)
-                .frame(minWidth: 480, minHeight: 360)
+                .environment(AppState.shared)
+                .frame(minWidth: 520, minHeight: 380)
         }
         .commands {
             CommandGroup(replacing: .appInfo) {
@@ -22,15 +21,26 @@ struct VibeTypeMacApp: App {
     }
 }
 
+@MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var menuBarController: MenuBarController?
+    private var hotkeyManager: HotkeyManager?
+    private var coordinator: ActionCoordinator?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
         menuBarController = MenuBarController()
+
+        let coordinator = ActionCoordinator(appState: AppState.shared)
+        self.coordinator = coordinator
+        self.hotkeyManager = HotkeyManager { [weak coordinator] action in
+            coordinator?.invoke(action)
+        }
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        hotkeyManager = nil
+        coordinator = nil
         menuBarController = nil
     }
 }
