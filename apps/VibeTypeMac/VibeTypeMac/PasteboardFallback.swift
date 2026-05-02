@@ -5,26 +5,47 @@ import Carbon.HIToolbox
 enum PasteboardFallback {
 
     /// ⌘C로 선택 텍스트를 복사 후 클립보드에서 읽는다.
-    /// 호출자는 finally 블록에서 `restoreClipboard(_:)` 를 반드시 호출해야 한다.
+    /// fixed sleep 대신 NSPasteboard.changeCount 폴링으로 ⌘C가 실제 반영된 시점을 기다린다.
+    /// 호출자는 finally에서 snapshot.restore()를 반드시 호출해야 한다.
     static func captureSelection() async throws -> (text: String, savedSnapshot: ClipboardSnapshot) {
         let snapshot = ClipboardSnapshot.capture()
-        NSPasteboard.general.clearContents()
+        let pasteboard = NSPasteboard.general
+        let beforeCount = pasteboard.changeCount
+
         try sendKeystroke(keyCode: kVK_ANSI_C, modifiers: [.maskCommand])
-        // ⌘C 처리 시간 확보. 일부 앱은 즉시 반영 안 됨.
-        try await Task.sleep(nanoseconds: 80_000_000)
-        guard let text = NSPasteboard.general.string(forType: .string), !text.isEmpty else {
-            snapshot.restore()
-            throw PasteboardError.nothingCopied
+
+        // 최대 600ms까지 changeCount 변화를 폴링 (20ms 간격).
+        let deadline = Date().addingTimeInterval(0.6)
+        while Date() < deadline {
+            if pasteboard.changeCount != beforeCount {
+                if let text = pasteboard.string(forType: .string), !text.isEmpty {
+                    return (text, snapshot)
+                }
+                break
+            }
+            try await Task.sleep(nanoseconds: 20_000_000)
         }
-        return (text, snapshot)
+        snapshot.restore()
+        throw PasteboardError.nothingCopied
     }
 
     /// 새 텍스트를 클립보드에 넣고 ⌘V로 붙여넣은 후 원래 클립보드를 복원한다.
     static func paste(_ text: String, restoring snapshot: ClipboardSnapshot) async throws {
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(text, forType: .string)
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(text, forType: .string)
+        let afterWrite = pasteboard.changeCount
+
         try sendKeystroke(keyCode: kVK_ANSI_V, modifiers: [.maskCommand])
-        try await Task.sleep(nanoseconds: 80_000_000)
+
+        // ⌘V가 처리될 시간을 changeCount 변화로 감지하거나 최대 400ms 대기.
+        let deadline = Date().addingTimeInterval(0.4)
+        while Date() < deadline {
+            if pasteboard.changeCount != afterWrite { break }
+            try await Task.sleep(nanoseconds: 30_000_000)
+        }
+        // 충분한 처리 시간을 추가로 둔 뒤 원본 복원.
+        try await Task.sleep(nanoseconds: 100_000_000)
         snapshot.restore()
     }
 

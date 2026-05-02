@@ -13,7 +13,8 @@ let package = Package(
     ],
     dependencies: [
         .package(url: "https://github.com/ml-explore/mlx-swift", from: "0.21.0"),
-        .package(url: "https://github.com/ml-explore/mlx-swift-examples", from: "2.21.0"),
+        .package(url: "https://github.com/ml-explore/mlx-swift-examples", from: "2.25.0"),
+        .package(url: "https://github.com/argmaxinc/WhisperKit", from: "0.10.0"),
     ],
     targets: [
         .target(
@@ -23,6 +24,7 @@ let package = Package(
                 .product(name: "MLXNN", package: "mlx-swift"),
                 .product(name: "MLXLLM", package: "mlx-swift-examples"),
                 .product(name: "MLXLMCommon", package: "mlx-swift-examples"),
+                .product(name: "WhisperKit", package: "WhisperKit"),
             ],
             path: "Sources/VibeTypeCore"
         ),

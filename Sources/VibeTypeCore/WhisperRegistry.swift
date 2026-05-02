@@ -1,0 +1,113 @@
+import Foundation
+
+public struct WhisperModelInfo: Sendable, Identifiable, Hashable {
+    public let id: String
+    public let displayName: String
+    /// WhisperKit이 인식하는 모델 이름 (HF repo 또는 변환 ID).
+    public let whisperKitName: String
+    public let approxSizeBytes: Int64
+    public let recommendedRAMGB: Int
+    public let supportsKorean: Bool
+    public let notes: String
+
+    public init(
+        id: String,
+        displayName: String,
+        whisperKitName: String,
+        approxSizeBytes: Int64,
+        recommendedRAMGB: Int,
+        supportsKorean: Bool,
+        notes: String = ""
+    ) {
+        self.id = id
+        self.displayName = displayName
+        self.whisperKitName = whisperKitName
+        self.approxSizeBytes = approxSizeBytes
+        self.recommendedRAMGB = recommendedRAMGB
+        self.supportsKorean = supportsKorean
+        self.notes = notes
+    }
+}
+
+public enum VibeTypeWhisperRegistry {
+    public static let largeV3Turbo = WhisperModelInfo(
+        id: "openai_whisper-large-v3_turbo_954MB",
+        displayName: "Whisper large-v3 turbo (954MB)",
+        whisperKitName: "openai_whisper-large-v3_turbo_954MB",
+        approxSizeBytes: 950_000_000,
+        recommendedRAMGB: 8,
+        supportsKorean: true,
+        notes: "기본 추천. 950MB int8, 한국어 우수, 실시간보다 빠름."
+    )
+
+    public static let largeV3 = WhisperModelInfo(
+        id: "openai_whisper-large-v3_947MB",
+        displayName: "Whisper large-v3 (947MB)",
+        whisperKitName: "openai_whisper-large-v3_947MB",
+        approxSizeBytes: 950_000_000,
+        recommendedRAMGB: 12,
+        supportsKorean: true,
+        notes: "비-turbo 정확도, turbo와 동일 크기."
+    )
+
+    public static let largeV3Full = WhisperModelInfo(
+        id: "openai_whisper-large-v3",
+        displayName: "Whisper large-v3 (full)",
+        whisperKitName: "openai_whisper-large-v3",
+        approxSizeBytes: 3_000_000_000,
+        recommendedRAMGB: 12,
+        supportsKorean: true,
+        notes: "양자화 없는 풀 모델. RAM 큼, 정확도 최고."
+    )
+
+    public static let small = WhisperModelInfo(
+        id: "openai_whisper-small",
+        displayName: "Whisper small",
+        whisperKitName: "openai_whisper-small",
+        approxSizeBytes: 500_000_000,
+        recommendedRAMGB: 4,
+        supportsKorean: true,
+        notes: "8GB Mac / 빠른 응답 필요 시."
+    )
+
+    public static let base = WhisperModelInfo(
+        id: "openai_whisper-base",
+        displayName: "Whisper base",
+        whisperKitName: "openai_whisper-base",
+        approxSizeBytes: 150_000_000,
+        recommendedRAMGB: 4,
+        supportsKorean: true,
+        notes: "초경량, 한국어 정확도 보통."
+    )
+
+    public static let tiny = WhisperModelInfo(
+        id: "openai_whisper-tiny",
+        displayName: "Whisper tiny",
+        whisperKitName: "openai_whisper-tiny",
+        approxSizeBytes: 75_000_000,
+        recommendedRAMGB: 4,
+        supportsKorean: false,
+        notes: "최소 모델, 한국어 정확도 떨어짐. 영어/테스트용."
+    )
+
+    public static let all: [WhisperModelInfo] = [
+        largeV3Turbo,
+        largeV3,
+        largeV3Full,
+        small,
+        base,
+        tiny,
+    ]
+
+    public static let `default` = largeV3Turbo
+
+    public static func model(byID id: String) -> WhisperModelInfo? {
+        all.first(where: { $0.id == id })
+    }
+
+    public static func recommended(forSystemRAMGB ramGB: Int) -> WhisperModelInfo {
+        if ramGB >= 12 { return largeV3Turbo }
+        if ramGB >= 8 { return largeV3Turbo }
+        return small
+    }
+}
