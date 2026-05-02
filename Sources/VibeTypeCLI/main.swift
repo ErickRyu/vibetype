@@ -43,14 +43,26 @@ func writeStderr(_ s: String) {
     FileHandle.standardError.write(Data(s.utf8))
 }
 
+final class ProgressLogger: @unchecked Sendable {
+    private var lastPct: Int = -1
+    private let lock = NSLock()
+    func report(_ fraction: Double) {
+        let pct = Int(fraction * 100)
+        lock.lock(); defer { lock.unlock() }
+        guard pct != lastPct else { return }
+        lastPct = pct
+        FileHandle.standardError.write(Data("\r  다운로드 \(pct)%   ".utf8))
+    }
+}
+
 func run(action: TextAction, input: String, model: ModelInfo) async {
     let engine = LLMEngine.shared
     writeStderr("→ 모델 로드: \(model.displayName)\n")
 
     do {
+        let logger = ProgressLogger()
         try await engine.load(model: model) { progress in
-            let pct = Int(progress.fractionCompleted * 100)
-            writeStderr("\r  다운로드 \(pct)%   ")
+            logger.report(progress.fractionCompleted)
         }
         writeStderr("\n→ 추론 시작 (\(action.displayNameKo))\n")
 
@@ -103,3 +115,9 @@ let modelID = ProcessInfo.processInfo.environment["VIBETYPE_MODEL"]
 let model = (modelID.flatMap { VibeTypeModelRegistry.model(byID: $0) }) ?? VibeTypeModelRegistry.default
 
 await run(action: action, input: input, model: model)
+
+// MLX는 종료 시 GPU/Metal 리소스 정리 중 SIGSEGV가 발생할 수 있어
+// _exit으로 atexit 핸들러를 모두 건너뛴다 (CLI 한정, 라이브러리 코드는 영향 없음).
+fflush(stdout)
+fflush(stderr)
+Darwin._exit(0)

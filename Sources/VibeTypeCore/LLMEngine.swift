@@ -102,9 +102,21 @@ public actor LLMEngine {
             let task = Task {
                 do {
                     let stream = try await self.makeStream(prompt: prompt, options: options)
+                    var buffer = ""
                     for try await token in stream {
                         if Task.isCancelled {
                             continuation.finish(throwing: LLMEngineError.generationCancelled)
+                            return
+                        }
+                        buffer += token
+                        if let stopRange = LLMEngine.stopTokenRange(in: buffer) {
+                            let cleanPrefix = String(buffer[..<stopRange.lowerBound])
+                            let alreadyEmitted = buffer.count - token.count
+                            if cleanPrefix.count > alreadyEmitted {
+                                let startIdx = cleanPrefix.index(cleanPrefix.startIndex, offsetBy: alreadyEmitted)
+                                continuation.yield(String(cleanPrefix[startIdx...]))
+                            }
+                            continuation.finish()
                             return
                         }
                         continuation.yield(token)
@@ -116,6 +128,27 @@ public actor LLMEngine {
             }
             continuation.onTermination = { _ in task.cancel() }
         }
+    }
+
+    static let stopMarkers: [String] = [
+        "<end_of_turn>",
+        "<eos>",
+        "<|im_end|>",
+        "<|endoftext|>",
+    ]
+
+    static func stopTokenRange(in text: String) -> Range<String.Index>? {
+        var earliest: Range<String.Index>?
+        for marker in stopMarkers {
+            if let range = text.range(of: marker) {
+                if let current = earliest {
+                    if range.lowerBound < current.lowerBound { earliest = range }
+                } else {
+                    earliest = range
+                }
+            }
+        }
+        return earliest
     }
 
     private func makeStream(
