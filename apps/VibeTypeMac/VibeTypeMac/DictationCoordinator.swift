@@ -1,5 +1,8 @@
 import AppKit
+import OSLog
 import VibeTypeCore
+
+private let log = Logger(subsystem: "com.vibetype.mac", category: "Dictation")
 
 /// 음성 받아쓰기 파이프라인 오케스트레이션.
 /// 1) 마이크 녹음 (push-to-talk: keyDown → start, keyUp → stop)
@@ -30,11 +33,15 @@ final class DictationCoordinator {
     }
 
     func startRecording() {
-        guard state == .idle else { return }
+        log.info("startRecording called, current state: \(String(describing: self.state))")
+        guard state == .idle else {
+            log.warning("startRecording skipped — state is \(String(describing: self.state))")
+            return
+        }
         Task { @MainActor in
-            // 권한 체크
             let granted = await AudioRecorder.requestPermission()
             guard granted else {
+                log.error("microphone permission denied")
                 self.transition(to: .failed("마이크 권한이 없습니다."))
                 NotificationPresenter.show(
                     title: "마이크 권한 필요",
@@ -46,8 +53,10 @@ final class DictationCoordinator {
 
             do {
                 try self.recorder.start()
+                log.info("recording started")
                 self.transition(to: .recording)
             } catch {
+                log.error("recording start failed: \(String(describing: error))")
                 self.transition(to: .failed(String(describing: error)))
                 NotificationPresenter.show(title: "녹음 시작 실패", body: String(describing: error))
                 self.transition(to: .idle)
@@ -56,20 +65,31 @@ final class DictationCoordinator {
     }
 
     func stopRecordingAndProcess() {
-        guard state == .recording else { return }
+        log.info("stopRecordingAndProcess called, current state: \(String(describing: self.state))")
+        guard state == .recording else {
+            log.warning("stop skipped — state is \(String(describing: self.state))")
+            return
+        }
 
         let samples: [Float]
         do {
             samples = try recorder.stop()
+            log.info("recording stopped, sample count: \(samples.count)")
         } catch {
+            log.error("recording stop failed: \(String(describing: error))")
             transition(to: .failed(String(describing: error)))
             transition(to: .idle)
             return
         }
 
-        // 너무 짧은 발화 무시 (Whisper 환각 방지)
         let durationSeconds = Double(samples.count) / 16_000.0
+        log.info("recorded duration: \(durationSeconds)s")
         guard durationSeconds >= 0.4, !samples.isEmpty else {
+            log.warning("recording too short (<400ms) or empty — skipping")
+            NotificationPresenter.show(
+                title: "녹음이 너무 짧습니다",
+                body: "Fn 키를 좀 더 오래 누른 채 말해주세요 (최소 0.4초)."
+            )
             transition(to: .idle)
             return
         }
@@ -82,11 +102,18 @@ final class DictationCoordinator {
 
             // 1) Whisper 전사
             self.transition(to: .transcribing)
+            log.info("whisper state: \(String(describing: appState.whisperState))")
             let raw: String
             do {
                 if appState.whisperState != .ready {
+                    NotificationPresenter.show(
+                        title: "Whisper 모델 로드 중",
+                        body: "첫 실행 시 5분 정도 걸립니다. 메뉴바 → 설정 → 받아쓰기 탭에서 진행 상황을 확인하세요. 로드가 끝난 뒤 다시 Fn 키를 누르면 됩니다."
+                    )
+                    log.info("triggering whisper load")
                     await appState.ensureWhisperLoaded()
                     guard appState.whisperState == .ready else {
+                        log.error("whisper load failed: \(appState.lastError ?? "unknown")")
                         NotificationPresenter.show(
                             title: "Whisper 모델 로드 실패",
                             body: appState.lastError ?? "다시 시도해 주세요."
@@ -94,13 +121,21 @@ final class DictationCoordinator {
                         return
                     }
                 }
+                log.info("whisper transcribing...")
                 raw = try await WhisperEngine.shared.transcribe(audioArray: samples, language: "ko")
+                log.info("whisper transcribed: \(raw)")
             } catch {
+                log.error("whisper failed: \(String(describing: error))")
                 NotificationPresenter.show(title: "음성 인식 실패", body: String(describing: error))
                 return
             }
 
             if DictationPostProcessor.shouldSkip(rawTranscript: raw) {
+                log.warning("post-processor skipped — empty/short transcript")
+                NotificationPresenter.show(
+                    title: "인식 결과 없음",
+                    body: "음성이 너무 작거나 짧았습니다. 다시 시도해 주세요."
+                )
                 return
             }
 
@@ -130,20 +165,27 @@ final class DictationCoordinator {
             let finalText = cleaned.isEmpty ? raw : cleaned
             guard !finalText.isEmpty else { return }
 
-            // 3) 포커스된 앱에 삽입 (AX → Pasteboard ⌘V)
+            // 3) 포커스된 앱에 삽입.
+            // Pasteboard ⌘V를 우선 — Notes/WebView/Electron 등 다양한 앱에서 안정.
+            // AX set은 일부 앱에서 silent no-op이라 마지막 폴백.
             self.transition(to: .typing)
+            log.info("inserting text: '\(finalText)' (length: \(finalText.count))")
+            let snapshot = ClipboardSnapshot.capture()
             do {
-                try AccessibilityService.insertTextViaAX(finalText)
+                try await PasteboardFallback.paste(finalText, restoring: snapshot)
+                log.info("pasteboard paste succeeded")
             } catch {
-                let snapshot = ClipboardSnapshot.capture()
+                log.warning("pasteboard paste failed: \(String(describing: error)) — trying AX fallback")
                 do {
-                    try await PasteboardFallback.paste(finalText, restoring: snapshot)
+                    try AccessibilityService.insertTextViaAX(finalText)
+                    log.info("AX fallback succeeded")
                 } catch {
+                    log.error("both pasteboard and AX failed: \(String(describing: error))")
                     NSPasteboard.general.clearContents()
                     NSPasteboard.general.setString(finalText, forType: .string)
                     NotificationPresenter.show(
                         title: "텍스트 삽입 실패",
-                        body: "결과는 클립보드에 복사되었습니다."
+                        body: "결과(\(finalText.prefix(30))…)는 클립보드에 복사되었습니다. ⌘V로 붙여넣어 주세요."
                     )
                 }
             }

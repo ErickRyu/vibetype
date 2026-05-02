@@ -61,6 +61,8 @@ enum PasteboardFallback {
         keyDown.flags = modifiers
         keyUp.flags = modifiers
         keyDown.post(tap: .cghidEventTap)
+        // 일부 앱은 keyDown/keyUp 사이 시간이 없으면 modifier 인식 못 함.
+        usleep(20_000)
         keyUp.post(tap: .cghidEventTap)
     }
 }
