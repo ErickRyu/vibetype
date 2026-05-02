@@ -2,6 +2,7 @@
 .claude/
 .build/
 .xcbuild/
+dist/
 apps/*/build/
 apps/*/*.xcodeproj/
 apps/*/*.xcworkspace/

@@ -96,6 +96,46 @@ VIBETYPE_MODEL=gemma-3-1b-it-qat-4bit \
 | `gemma-2-9b-it-4bit` | 5.5GB | 24GB+ | ✗ |
 | `gemma-3-1b-it-qat-4bit` | 0.8GB | 6GB+ | ✓ |
 
+## 배포
+
+### 1. 앱 아이콘 통합
+
+1024×1024 PNG를 준비해 다음 명령으로 자동 생성:
+
+```bash
+make icon ICON=path/to/icon-1024.png
+```
+
+`apps/VibeTypeMac/VibeTypeMac/Assets.xcassets/AppIcon.appiconset/`에 모든 사이즈가 자동 생성됩니다.
+
+### 2. Release 빌드
+
+```bash
+# 서명 없이 (개발/내부 테스트용)
+make release
+
+# Developer ID 서명 (배포 전 단계)
+export DEVELOPER_ID_APP="Developer ID Application: 이름 (TEAM_ID)"
+make release-sign
+
+# 서명 + 노타라이즈 + DMG (배포용)
+export DEVELOPER_ID_APP="Developer ID Application: 이름 (TEAM_ID)"
+export APPLE_TEAM_ID="ABC1234567"
+export APPLE_ID="you@example.com"
+export APPLE_APP_PASSWORD="xxxx-xxxx-xxxx-xxxx"   # appleid.apple.com에서 발급
+make release-notarize
+```
+
+산출물:
+- `apps/VibeTypeMac/build/Build/Products/Release/VibeType.app`
+- `dist/VibeType.dmg` (create-dmg 설치 시: `brew install create-dmg`)
+
+### 3. 권한 요구사항 (사용자 안내)
+
+- **Microphone** — 음성 받아쓰기
+- **Accessibility** — 받아쓰기 결과를 다른 앱에 입력
+- 두 권한 모두 System Settings → Privacy & Security에서 직접 grant 필요
+
 ## 라이선스
 
 (추후 결정)

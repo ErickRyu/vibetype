@@ -1,4 +1,4 @@
-.PHONY: help test build run clean models metaltools mac mac-run mac-gen
+.PHONY: help test build run clean models metaltools mac mac-run mac-gen icon release release-sign release-notarize
 
 CLI := .xcbuild/Build/Products/Debug/vibetype-cli
 DERIVED := .xcbuild
@@ -18,6 +18,10 @@ help:
 	@echo "  make mac-gen       Mac 앱 Xcode 프로젝트 재생성 (xcodegen)"
 	@echo "  make mac           Mac 메뉴바 앱 빌드"
 	@echo "  make mac-run       Mac 메뉴바 앱 빌드 + 실행"
+	@echo "  make icon ICON=path/to/1024.png  AppIcon 자동 생성"
+	@echo "  make release       Release 빌드 (서명 없음)"
+	@echo "  make release-sign  Release 빌드 + 서명 (DEVELOPER_ID_APP 필요)"
+	@echo "  make release-notarize  서명 + 노타라이즈 + DMG (배포용)"
 	@echo "  make clean         빌드 산출물 정리"
 	@echo "  make metaltools    Metal Toolchain 다운로드 (Xcode 26+, 최초 1회)"
 
@@ -45,8 +49,21 @@ mac: mac-gen
 mac-run: mac
 	open $(MAC_APP)
 
+icon:
+	@test -n "$(ICON)" || (echo "사용법: make icon ICON=path/to/1024x1024.png"; exit 1)
+	./scripts/make-icon.sh "$(ICON)"
+
+release:
+	./scripts/release.sh
+
+release-sign:
+	./scripts/release.sh --sign
+
+release-notarize:
+	./scripts/release.sh --sign --notarize
+
 clean:
-	rm -rf .build $(DERIVED) $(MAC_DIR)/build $(MAC_DIR)/VibeTypeMac.xcodeproj
+	rm -rf .build $(DERIVED) $(MAC_DIR)/build $(MAC_DIR)/VibeTypeMac.xcodeproj dist
 
 metaltools:
 	xcodebuild -downloadComponent MetalToolchain
