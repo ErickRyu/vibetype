@@ -76,7 +76,7 @@ final class MenuBarController: NSObject, NSMenuDelegate {
             applyIcon(symbolName: "mic", template: true, accentColor: nil)
         case .recording:
             applyIcon(symbolName: "mic.fill", template: false, accentColor: .systemRed)
-        case .transcribing:
+        case .transcribing(_):
             applyIcon(symbolName: "waveform", template: true, accentColor: nil)
         case .postProcessing:
             applyIcon(symbolName: "wand.and.stars", template: true, accentColor: nil)

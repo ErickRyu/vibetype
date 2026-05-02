@@ -36,6 +36,7 @@ struct DictationHUDView: View {
                 .symbolEffect(.variableColor.iterative)
                 .font(.title3)
                 .foregroundStyle(.cyan)
+                .accessibilityLabel("음성 인식 중")
         case .postProcessing:
             Image(systemName: "wand.and.stars")
                 .symbolEffect(.pulse)
@@ -61,11 +62,17 @@ struct DictationHUDView: View {
         case .recording:
             WaveformBars()
                 .frame(maxWidth: .infinity)
-        case .transcribing:
-            Text("음성 인식 중…")
-                .font(.callout)
-                .foregroundStyle(.white.opacity(0.85))
-                .frame(maxWidth: .infinity, alignment: .leading)
+        case .transcribing(let progress):
+            VStack(alignment: .leading, spacing: 4) {
+                Text("음성 인식 중…")
+                    .font(.caption)
+                    .foregroundStyle(.white.opacity(0.85))
+                ProgressView(value: max(0, min(progress, 1.0)))
+                    .progressViewStyle(.linear)
+                    .tint(.cyan)
+                    .frame(height: 4)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
         case .postProcessing:
             Text("다듬는 중…")
                 .font(.callout)
@@ -100,7 +107,11 @@ struct DictationHUDView: View {
                 }
                 .buttonStyle(.plain)
             }
-        case .transcribing, .postProcessing, .typing:
+        case .transcribing(let progress):
+            Text("\(Int(progress * 100))%")
+                .font(.system(size: 11, weight: .medium, design: .monospaced))
+                .foregroundStyle(.white.opacity(0.7))
+        case .postProcessing, .typing:
             ProgressView()
                 .controlSize(.small)
                 .colorScheme(.dark)

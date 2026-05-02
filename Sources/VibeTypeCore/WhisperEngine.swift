@@ -19,6 +19,12 @@ public actor WhisperEngine {
     public var isLoaded: Bool { whisper != nil }
     public var currentModelID: String? { loadedModelID }
 
+    /// 현재 진행 중인 transcribe의 진행률 (0.0 ~ 1.0).
+    /// 호출자가 폴링해서 UI 갱신에 사용.
+    public var currentProgressFraction: Double {
+        whisper?.progress.fractionCompleted ?? 0
+    }
+
     public func load(model: WhisperModelInfo) async throws {
         if loadedModelID == model.id, whisper != nil { return }
 

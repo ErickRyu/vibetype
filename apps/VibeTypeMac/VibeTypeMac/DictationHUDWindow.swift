@@ -33,6 +33,8 @@ final class DictationHUDWindow {
         case .recording, .transcribing, .postProcessing, .typing:
             cancelScheduledHide()
             ensureVisible()
+        @unknown default:
+            ensureVisible()
         }
     }
 

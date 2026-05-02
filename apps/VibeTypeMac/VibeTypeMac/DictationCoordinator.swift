@@ -14,7 +14,8 @@ final class DictationCoordinator {
     enum State: Sendable, Equatable {
         case idle
         case recording
-        case transcribing
+        /// progress: 0.0 ~ 1.0 (Whisper progress KVO에서 폴링)
+        case transcribing(progress: Double)
         case postProcessing
         case typing
         case failed(String)
@@ -97,8 +98,8 @@ final class DictationCoordinator {
                 self.transition(to: .idle)
             }
 
-            // 1) Whisper 전사
-            self.transition(to: .transcribing)
+            // 1) Whisper 전사 + 진행률 폴링
+            self.transition(to: .transcribing(progress: 0))
             log.info("whisper state: \(String(describing: appState.whisperState))")
             let raw: String
             do {
@@ -112,7 +113,16 @@ final class DictationCoordinator {
                     }
                 }
                 log.info("whisper transcribing...")
+                let progressTask = Task { @MainActor [weak self] in
+                    while !Task.isCancelled {
+                        let p = await WhisperEngine.shared.currentProgressFraction
+                        self?.transition(to: .transcribing(progress: p))
+                        try? await Task.sleep(nanoseconds: 100_000_000)
+                    }
+                }
+                defer { progressTask.cancel() }
                 raw = try await WhisperEngine.shared.transcribe(audioArray: samples, language: "ko")
+                progressTask.cancel()
                 log.info("whisper transcribed: \(raw)")
             } catch {
                 log.error("whisper failed: \(String(describing: error))")
