@@ -15,13 +15,7 @@ final class MenuBarController: NSObject, NSMenuDelegate {
     }
 
     private func configure() {
-        if let button = statusItem.button {
-            button.image = NSImage(
-                systemSymbolName: "wand.and.stars",
-                accessibilityDescription: "VibeType"
-            )
-            button.image?.isTemplate = true
-        }
+        applyIcon(symbolName: "mic", template: true)
 
         menu.delegate = self
 
@@ -74,5 +68,36 @@ final class MenuBarController: NSObject, NSMenuDelegate {
 
     @objc private func quit() {
         NSApp.terminate(nil)
+    }
+
+    func updateDictationState(_ state: DictationCoordinator.State) {
+        switch state {
+        case .idle:
+            applyIcon(symbolName: "mic", template: true, accentColor: nil)
+        case .recording:
+            applyIcon(symbolName: "mic.fill", template: false, accentColor: .systemRed)
+        case .transcribing:
+            applyIcon(symbolName: "waveform", template: true, accentColor: nil)
+        case .postProcessing:
+            applyIcon(symbolName: "wand.and.stars", template: true, accentColor: nil)
+        case .typing:
+            applyIcon(symbolName: "keyboard", template: true, accentColor: nil)
+        case .failed:
+            applyIcon(symbolName: "exclamationmark.triangle", template: false, accentColor: .systemOrange)
+        }
+    }
+
+    private func applyIcon(symbolName: String, template: Bool, accentColor: NSColor? = nil) {
+        guard let button = statusItem.button else { return }
+        let config: NSImage.SymbolConfiguration = {
+            if let color = accentColor {
+                return NSImage.SymbolConfiguration(paletteColors: [color])
+            }
+            return NSImage.SymbolConfiguration(pointSize: 14, weight: .regular)
+        }()
+        let image = NSImage(systemSymbolName: symbolName, accessibilityDescription: "VibeType")?
+            .withSymbolConfiguration(config)
+        button.image = image
+        button.image?.isTemplate = template
     }
 }

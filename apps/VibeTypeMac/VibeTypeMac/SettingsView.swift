@@ -7,9 +7,14 @@ struct SettingsView: View {
 
     var body: some View {
         TabView {
+            whisperTab
+                .tabItem {
+                    Label("받아쓰기", systemImage: "mic")
+                }
+
             modelTab
                 .tabItem {
-                    Label("모델", systemImage: "cpu")
+                    Label("후처리 LLM", systemImage: "cpu")
                 }
 
             shortcutsTab
@@ -25,17 +30,101 @@ struct SettingsView: View {
         .padding()
     }
 
-    private var shortcutsTab: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("글로벌 단축키")
+    private var whisperTab: some View {
+        @Bindable var state = state
+        return VStack(alignment: .leading, spacing: 16) {
+            Text("Whisper STT 모델")
                 .font(.headline)
-            Text("어떤 앱에서든 텍스트를 선택한 뒤 아래 단축키를 누르면 그 자리에서 결과가 교체됩니다.")
+
+            Picker("모델 선택", selection: $state.selectedWhisperID) {
+                ForEach(VibeTypeWhisperRegistry.all) { model in
+                    Text("\(model.displayName)  ·  \(formatSize(model.approxSizeBytes))")
+                        .tag(model.id)
+                }
+            }
+            .pickerStyle(.menu)
+
+            Text(state.selectedWhisper.notes)
                 .font(.caption)
                 .foregroundStyle(.secondary)
 
-            Form {
-                ForEach(TextAction.allCases, id: \.self) { action in
-                    KeyboardShortcuts.Recorder(action.displayNameKo, name: HotkeyManager.shortcutName(for: action))
+            Divider()
+
+            whisperStatusRow
+
+            Spacer()
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var whisperStatusRow: some View {
+        HStack {
+            switch state.whisperState {
+            case .notLoaded:
+                Button("Whisper 모델 다운로드 / 로드") {
+                    Task { await state.ensureWhisperLoaded() }
+                }
+                .buttonStyle(.borderedProminent)
+            case .downloading(let p):
+                VStack(alignment: .leading, spacing: 4) {
+                    ProgressView(value: p)
+                        .frame(maxWidth: .infinity)
+                    Text("다운로드 중… \(Int(p * 100))%")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            case .loading:
+                ProgressView("Whisper 모델 로드 중… (CoreML 컴파일, 첫 회 5분 소요)")
+            case .ready:
+                Label("준비됨", systemImage: "checkmark.circle.fill")
+                    .foregroundStyle(.green)
+                Spacer()
+                Button("모델 변경 적용") {
+                    Task { await state.switchWhisper(to: state.selectedWhisperID) }
+                }
+            case .failed(let msg):
+                VStack(alignment: .leading) {
+                    Label("로드 실패", systemImage: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.red)
+                    Text(msg)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(3)
+                    Button("다시 시도") {
+                        Task { await state.ensureWhisperLoaded() }
+                    }
+                }
+            }
+        }
+    }
+
+    private var shortcutsTab: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            // 받아쓰기 (메인)
+            VStack(alignment: .leading, spacing: 8) {
+                Text("받아쓰기")
+                    .font(.headline)
+                Text("단축키를 누르면 마이크로 녹음, 한 번 더 누르면 변환되어 포커스된 앱에 입력됩니다. (Phase C에서 push-to-talk으로 전환 예정)")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Form {
+                    KeyboardShortcuts.Recorder("받아쓰기 시작/정지", name: .dictate)
+                }
+            }
+
+            Divider()
+
+            // 텍스트 다듬기 (보너스)
+            VStack(alignment: .leading, spacing: 8) {
+                Text("텍스트 다듬기 (보너스)")
+                    .font(.headline)
+                Text("어떤 앱에서든 텍스트를 선택한 뒤 아래 단축키를 누르면 결과로 교체됩니다. 디폴트 단축키 미할당 — 원하는 키를 직접 매핑하세요.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Form {
+                    ForEach(TextAction.allCases, id: \.self) { action in
+                        KeyboardShortcuts.Recorder(action.displayNameKo, name: HotkeyManager.shortcutName(for: action))
+                    }
                 }
             }
             Spacer()

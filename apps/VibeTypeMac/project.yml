@@ -18,7 +18,8 @@ settings:
     INFOPLIST_KEY_LSUIElement: YES
     INFOPLIST_KEY_NSHumanReadableCopyright: "© 2026 VibeType"
     INFOPLIST_KEY_CFBundleDisplayName: VibeType
-    INFOPLIST_KEY_NSAccessibilityUsageDescription: "VibeType은 선택한 텍스트를 읽고 AI 결과로 교체하기 위해 Accessibility 권한이 필요합니다."
+    INFOPLIST_KEY_NSAccessibilityUsageDescription: "VibeType은 받아쓰기 결과를 포커스된 앱에 직접 입력하기 위해 Accessibility 권한이 필요합니다."
+    INFOPLIST_KEY_NSMicrophoneUsageDescription: "VibeType은 음성 받아쓰기를 위해 마이크 접근 권한이 필요합니다. 음성은 모두 사용자의 Mac에서 로컬로 처리되며 외부에 전송되지 않습니다."
 
 packages:
   VibeTypeCore:

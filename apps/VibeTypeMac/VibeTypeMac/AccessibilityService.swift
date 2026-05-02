@@ -57,6 +57,13 @@ struct AccessibilityService {
         return selectedString
     }
 
+    /// 포커스된 UI 요소의 커서 위치에 텍스트를 삽입한다.
+    /// AX의 `kAXSelectedTextAttribute` set은 selection 길이가 0일 때
+    /// 커서 위치 insertion으로 동작한다. 한글 IME 우회.
+    static func insertTextViaAX(_ text: String) throws {
+        try replaceSelectionViaAX(with: text)
+    }
+
     /// 포커스된 UI 요소의 선택 텍스트를 새 값으로 교체한다.
     /// 실패 시 Pasteboard 폴백을 호출자가 사용한다.
     static func replaceSelectionViaAX(with text: String) throws {

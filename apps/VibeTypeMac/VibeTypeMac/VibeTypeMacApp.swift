@@ -5,8 +5,6 @@ import AppKit
 struct VibeTypeMacApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
 
-    // LSUIElement 앱이라 SwiftUI Scene은 형식적으로만 둔다.
-    // 실제 설정 윈도우는 SettingsWindowController가 NSWindow로 띄운다.
     var body: some Scene {
         Settings { EmptyView() }
     }
@@ -16,22 +14,42 @@ struct VibeTypeMacApp: App {
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var menuBarController: MenuBarController?
     private var hotkeyManager: HotkeyManager?
-    private var coordinator: ActionCoordinator?
+    private var dictation: DictationCoordinator?
+    private var textRewrite: ActionCoordinator?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
         menuBarController = MenuBarController()
 
-        let coordinator = ActionCoordinator(appState: AppState.shared)
-        self.coordinator = coordinator
-        self.hotkeyManager = HotkeyManager { [weak coordinator] action in
-            coordinator?.invoke(action)
+        let dictation = DictationCoordinator(appState: AppState.shared)
+        let textRewrite = ActionCoordinator(appState: AppState.shared)
+        self.dictation = dictation
+        self.textRewrite = textRewrite
+
+        // 메뉴바 인디케이터를 dictation 상태에 연결
+        dictation.onStateChange = { [weak self] state in
+            self?.menuBarController?.updateDictationState(state)
         }
+
+        self.hotkeyManager = HotkeyManager(
+            onDictationToggle: { [weak dictation] in
+                guard let dictation else { return }
+                if dictation.state == .recording {
+                    dictation.stopRecordingAndProcess()
+                } else if dictation.state == .idle {
+                    dictation.startRecording()
+                }
+            },
+            onTextAction: { [weak textRewrite] action in
+                textRewrite?.invoke(action)
+            }
+        )
     }
 
     func applicationWillTerminate(_ notification: Notification) {
         hotkeyManager = nil
-        coordinator = nil
+        dictation = nil
+        textRewrite = nil
         menuBarController = nil
     }
 }
