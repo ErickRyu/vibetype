@@ -1,0 +1,19 @@
+.DS_Store
+.build/
+.xcbuild/
+.swiftpm/
+DerivedData/
+*.xcodeproj
+*.xcworkspace
+Package.resolved
+.env
+.env.local
+*.log
+
+# Local model cache
+.models/
+
+# IDE
+.vscode/
+.idea/
+*.swp
