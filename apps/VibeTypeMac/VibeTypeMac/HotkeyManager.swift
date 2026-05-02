@@ -3,9 +3,10 @@ import KeyboardShortcuts
 import VibeTypeCore
 
 extension KeyboardShortcuts.Name {
-    /// 받아쓰기 단축키 (Phase B는 임시 토글: ⌥⇧Space → 시작/정지).
-    /// Phase C에서 keyDown=start, keyUp=stop의 push-to-talk으로 전환 예정.
-    static let dictate = Self("vibetype.dictate", default: .init(.space, modifiers: [.option, .shift]))
+    /// 받아쓰기 토글 단축키 (선택 사항, 디폴트 미할당).
+    /// 기본 트리거는 Fn 키(push-to-talk) — FnKeyMonitor가 처리.
+    /// 사용자가 Fn 외 다른 키 조합으로도 토글하고 싶을 때만 설정.
+    static let dictate = Self("vibetype.dictate")
 
     // 보너스: 텍스트 다듬기 액션 (디폴트 단축키 미할당, 사용자가 설정에서 매핑)
     static let invokeImprove     = Self("vibetype.improve")

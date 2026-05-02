@@ -14,6 +14,7 @@ struct VibeTypeMacApp: App {
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var menuBarController: MenuBarController?
     private var hotkeyManager: HotkeyManager?
+    private var fnMonitor: FnKeyMonitor?
     private var dictation: DictationCoordinator?
     private var textRewrite: ActionCoordinator?
 
@@ -26,11 +27,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         self.dictation = dictation
         self.textRewrite = textRewrite
 
-        // 메뉴바 인디케이터를 dictation 상태에 연결
         dictation.onStateChange = { [weak self] state in
             self?.menuBarController?.updateDictationState(state)
         }
 
+        // Fn 키 push-to-talk: 누르면 녹음 시작, 떼면 처리.
+        self.fnMonitor = FnKeyMonitor { [weak dictation] pressed in
+            guard let dictation else { return }
+            if pressed {
+                if dictation.state == .idle {
+                    dictation.startRecording()
+                }
+            } else {
+                if dictation.state == .recording {
+                    dictation.stopRecordingAndProcess()
+                }
+            }
+        }
+
+        // KeyboardShortcuts: 보너스 텍스트 액션만 (디폴트 미할당).
+        // 받아쓰기는 Fn 키 모니터로 처리.
         self.hotkeyManager = HotkeyManager(
             onDictationToggle: { [weak dictation] in
                 guard let dictation else { return }
@@ -47,6 +63,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        fnMonitor?.stop()
+        fnMonitor = nil
         hotkeyManager = nil
         dictation = nil
         textRewrite = nil

@@ -100,15 +100,29 @@ struct SettingsView: View {
 
     private var shortcutsTab: some View {
         VStack(alignment: .leading, spacing: 16) {
-            // 받아쓰기 (메인)
+            // 받아쓰기 (메인) — Fn 키 push-to-talk
             VStack(alignment: .leading, spacing: 8) {
                 Text("받아쓰기")
                     .font(.headline)
-                Text("단축키를 누르면 마이크로 녹음, 한 번 더 누르면 변환되어 포커스된 앱에 입력됩니다. (Phase C에서 push-to-talk으로 전환 예정)")
+                Label {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Fn 키(또는 🌐 Globe 키)를 **누르고 있는 동안 녹음**, 떼면 변환되어 포커스된 앱에 입력됩니다.")
+                        Text("⚠️ macOS의 \"Fn 키 누르기\" 기능과 충돌 시: System Settings → Keyboard → \"Press 🌐 key to\"를 \"Do Nothing\"으로 변경해 주세요.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                } icon: {
+                    Image(systemName: "mic.fill")
+                        .foregroundStyle(.tint)
+                }
+                .font(.callout)
+
+                Text("선택 — 추가 단축키로도 토글하기:")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                    .padding(.top, 4)
                 Form {
-                    KeyboardShortcuts.Recorder("받아쓰기 시작/정지", name: .dictate)
+                    KeyboardShortcuts.Recorder("받아쓰기 토글 (선택)", name: .dictate)
                 }
             }
 
