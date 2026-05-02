@@ -50,6 +50,14 @@
 > 실제 추론 실행 가능한 빌드는 **`xcodebuild`** 또는 Xcode를 통해야 합니다.
 > `swift build`는 코드 컴파일 검증과 단위 테스트(추론 미포함)에만 사용하세요.
 
+### 사전 요구사항
+
+Xcode 26+에서는 Metal Toolchain이 별도 다운로드입니다 (최초 1회):
+
+```bash
+xcodebuild -downloadComponent MetalToolchain
+```
+
 ### 단위 테스트 (SPM CLI, 추론 없음)
 
 ```bash
