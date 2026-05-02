@@ -2,6 +2,9 @@
 .claude/
 .build/
 .xcbuild/
+apps/*/build/
+apps/*/*.xcodeproj/
+apps/*/*.xcworkspace/
 .swiftpm/
 DerivedData/
 *.xcodeproj

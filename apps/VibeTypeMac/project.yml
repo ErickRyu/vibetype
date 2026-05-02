@@ -1,0 +1,49 @@
+name: VibeTypeMac
+options:
+  bundleIdPrefix: com.vibetype
+  deploymentTarget:
+    macOS: "14.0"
+  developmentLanguage: ko
+  defaultConfig: Debug
+
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    MACOSX_DEPLOYMENT_TARGET: "14.0"
+    SWIFT_STRICT_CONCURRENCY: complete
+    CODE_SIGN_STYLE: Automatic
+    CODE_SIGN_ENTITLEMENTS: VibeTypeMac/VibeTypeMac.entitlements
+    ENABLE_HARDENED_RUNTIME: YES
+    PRODUCT_NAME: VibeType
+    INFOPLIST_KEY_LSUIElement: YES
+    INFOPLIST_KEY_NSHumanReadableCopyright: "© 2026 VibeType"
+    INFOPLIST_KEY_CFBundleDisplayName: VibeType
+    INFOPLIST_KEY_NSAccessibilityUsageDescription: "VibeType은 선택한 텍스트를 읽고 AI 결과로 교체하기 위해 Accessibility 권한이 필요합니다."
+
+packages:
+  VibeTypeCore:
+    path: ../..
+
+targets:
+  VibeTypeMac:
+    type: application
+    platform: macOS
+    sources:
+      - path: VibeTypeMac
+        excludes:
+          - "VibeTypeMac.entitlements"
+    dependencies:
+      - package: VibeTypeCore
+        product: VibeTypeCore
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.vibetype.mac
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        GENERATE_INFOPLIST_FILE: YES
+schemes:
+  VibeTypeMac:
+    build:
+      targets:
+        VibeTypeMac: all
+    run:
+      config: Debug
