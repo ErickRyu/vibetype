@@ -34,7 +34,7 @@ sips -z 256 256   "$SOURCE" --out "$DEST_DIR/icon_128x128@2x.png" > /dev/null
 sips -z 256 256   "$SOURCE" --out "$DEST_DIR/icon_256x256.png"    > /dev/null
 sips -z 512 512   "$SOURCE" --out "$DEST_DIR/icon_256x256@2x.png" > /dev/null
 sips -z 512 512   "$SOURCE" --out "$DEST_DIR/icon_512x512.png"    > /dev/null
-cp "$SOURCE"                       "$DEST_DIR/icon_512x512@2x.png"
+sips -z 1024 1024 "$SOURCE" --out "$DEST_DIR/icon_512x512@2x.png" > /dev/null
 
 echo "✓ AppIcon 생성 완료: $DEST_DIR"
 echo "  다음: 'make mac' 빌드 → 메뉴바·Dock 아이콘 확인"
