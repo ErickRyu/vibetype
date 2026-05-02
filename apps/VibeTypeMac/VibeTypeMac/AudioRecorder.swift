@@ -15,22 +15,48 @@ enum AudioRecorderError: Error, LocalizedError {
     }
 }
 
-/// AVAudioEngine 기반 마이크 녹음.
-/// 16kHz mono Float32 PCM 버퍼를 누적해 Whisper에 직접 전달 가능한 [Float]로 반환한다.
+/// AVAudioEngine 실시간 콜백은 audio realtime 큐에서 호출되므로
+/// MainActor 격리 클래스에서 직접 mutate하면 strict concurrency assertion에 걸린다.
+/// 락으로 보호되는 Sendable 버퍼로 분리.
+final class AudioSampleBuffer: @unchecked Sendable {
+    private let lock = NSLock()
+    private var storage: [Float] = []
+
+    func append(_ chunk: [Float]) {
+        lock.lock(); defer { lock.unlock() }
+        storage.append(contentsOf: chunk)
+    }
+
+    func drain() -> [Float] {
+        lock.lock(); defer { lock.unlock() }
+        let captured = storage
+        storage.removeAll(keepingCapacity: true)
+        return captured
+    }
+
+    func count() -> Int {
+        lock.lock(); defer { lock.unlock() }
+        return storage.count
+    }
+
+    func clear() {
+        lock.lock(); defer { lock.unlock() }
+        storage.removeAll(keepingCapacity: true)
+    }
+}
+
 @MainActor
 final class AudioRecorder {
     private let engine = AVAudioEngine()
     private let targetSampleRate: Double = 16_000
-    private var samples: [Float] = []
+    private let buffer = AudioSampleBuffer()
     private var converter: AVAudioConverter?
     private var isRecording = false
 
-    /// 마이크 권한 상태.
     static var permissionStatus: AVAuthorizationStatus {
         AVCaptureDevice.authorizationStatus(for: .audio)
     }
 
-    /// 마이크 권한 요청. 처음이면 시스템 다이얼로그 표시.
     static func requestPermission() async -> Bool {
         if permissionStatus == .authorized { return true }
         if permissionStatus == .denied || permissionStatus == .restricted { return false }
@@ -47,17 +73,16 @@ final class AudioRecorder {
             throw AudioRecorderError.permissionDenied
         }
 
-        samples.removeAll(keepingCapacity: true)
+        buffer.clear()
         let inputNode = engine.inputNode
         let inputFormat = inputNode.outputFormat(forBus: 0)
 
-        let targetFormat = AVAudioFormat(
+        guard let targetFormat = AVAudioFormat(
             commonFormat: .pcmFormatFloat32,
             sampleRate: targetSampleRate,
             channels: 1,
             interleaved: false
-        )
-        guard let targetFormat else {
+        ) else {
             throw AudioRecorderError.engineFailure("16kHz mono Float32 포맷 생성 실패")
         }
 
@@ -66,10 +91,10 @@ final class AudioRecorder {
         }
         self.converter = converter
 
-        // input → buffer → 16kHz mono 변환 → samples 누적
-        inputNode.installTap(onBus: 0, bufferSize: 4096, format: inputFormat) { [weak self] buffer, _ in
-            guard let self else { return }
-            self.appendBuffer(buffer, with: converter, targetFormat: targetFormat)
+        // Realtime 콜백: capture-list로 Sendable 값들만 받아 actor 격리에서 벗어남.
+        let bufferRef = self.buffer
+        inputNode.installTap(onBus: 0, bufferSize: 4096, format: inputFormat) { inputBuffer, _ in
+            Self.processBuffer(inputBuffer, converter: converter, targetFormat: targetFormat, into: bufferRef)
         }
 
         do {
@@ -87,9 +112,7 @@ final class AudioRecorder {
         engine.stop()
         isRecording = false
         converter = nil
-        let captured = samples
-        samples.removeAll(keepingCapacity: true)
-        return captured
+        return buffer.drain()
     }
 
     func cancel() {
@@ -98,17 +121,20 @@ final class AudioRecorder {
         engine.stop()
         isRecording = false
         converter = nil
-        samples.removeAll(keepingCapacity: true)
+        buffer.clear()
     }
 
     var currentDurationSeconds: Double {
-        Double(samples.count) / targetSampleRate
+        Double(buffer.count()) / targetSampleRate
     }
 
-    private nonisolated func appendBuffer(
+    /// nonisolated static — 어떤 실행 컨텍스트에서도 호출 가능.
+    /// AVAudioConverter는 Sendable이 아니지만 동일 큐에서만 사용되므로 안전.
+    private nonisolated static func processBuffer(
         _ inputBuffer: AVAudioPCMBuffer,
-        with converter: AVAudioConverter,
-        targetFormat: AVAudioFormat
+        converter: AVAudioConverter,
+        targetFormat: AVAudioFormat,
+        into output: AudioSampleBuffer
     ) {
         let ratio = targetFormat.sampleRate / inputBuffer.format.sampleRate
         let outputCapacity = AVAudioFrameCount(Double(inputBuffer.frameLength) * ratio + 16)
@@ -132,9 +158,6 @@ final class AudioRecorder {
               let channelData = outputBuffer.floatChannelData?[0] else { return }
         let frames = Int(outputBuffer.frameLength)
         let bufferPtr = UnsafeBufferPointer(start: channelData, count: frames)
-        let chunk = Array(bufferPtr)
-        Task { @MainActor [weak self] in
-            self?.samples.append(contentsOf: chunk)
-        }
+        output.append(Array(bufferPtr))
     }
 }
