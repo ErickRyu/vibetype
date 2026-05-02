@@ -5,19 +5,10 @@ import AppKit
 struct VibeTypeMacApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
 
+    // LSUIElement 앱이라 SwiftUI Scene은 형식적으로만 둔다.
+    // 실제 설정 윈도우는 SettingsWindowController가 NSWindow로 띄운다.
     var body: some Scene {
-        Settings {
-            SettingsView()
-                .environment(AppState.shared)
-                .frame(minWidth: 520, minHeight: 380)
-        }
-        .commands {
-            CommandGroup(replacing: .appInfo) {
-                Button("VibeType 정보") {
-                    NSApp.orderFrontStandardAboutPanel(nil)
-                }
-            }
-        }
+        Settings { EmptyView() }
     }
 }
 
