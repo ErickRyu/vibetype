@@ -126,30 +126,40 @@ final class DictationCoordinator {
                 return
             }
 
-            // 2) Gemma 후처리
-            self.transition(to: .postProcessing)
-            let cleaned: String
-            do {
-                if appState.modelState != .ready {
-                    await appState.ensureModelLoaded()
-                }
-                if appState.modelState == .ready {
-                    let prompt = DictationPostProcessor.makePrompt(rawTranscript: raw)
-                    var result = ""
-                    for try await token in LLMEngine.shared.stream(prompt: prompt, options: .dictationCleanup) {
-                        result += token
+            // 2) Gemma 후처리 (옵션, 디폴트 OFF)
+            let finalText: String
+            if appState.useGemmaPostProcessing {
+                self.transition(to: .postProcessing)
+                let cleaned: String
+                do {
+                    if appState.modelState != .ready {
+                        await appState.ensureModelLoaded()
                     }
-                    cleaned = result.trimmingCharacters(in: .whitespacesAndNewlines)
-                } else {
-                    // Gemma 미준비 시 raw로 fallback
+                    if appState.modelState == .ready {
+                        let prompt = DictationPostProcessor.makePrompt(rawTranscript: raw)
+                        var result = ""
+                        for try await token in LLMEngine.shared.stream(prompt: prompt, options: .dictationCleanup) {
+                            result += token
+                        }
+                        cleaned = result.trimmingCharacters(in: .whitespacesAndNewlines)
+                    } else {
+                        cleaned = raw
+                    }
+                } catch {
                     cleaned = raw
                 }
-            } catch {
-                // 후처리 실패해도 raw는 입력 (degrade gracefully)
-                cleaned = raw
+                // 안전장치: Gemma가 결과를 너무 짧게 잘라내면 raw 사용.
+                if cleaned.count < raw.count / 2 {
+                    log.warning("post-processing returned suspiciously short text (\(cleaned.count) vs raw \(raw.count)) — using raw")
+                    finalText = raw
+                } else {
+                    finalText = cleaned.isEmpty ? raw : cleaned
+                }
+            } else {
+                log.info("gemma post-processing disabled — using whisper raw output")
+                finalText = raw
             }
 
-            let finalText = cleaned.isEmpty ? raw : cleaned
             guard !finalText.isEmpty else { return }
 
             // 3) 포커스된 앱에 삽입.

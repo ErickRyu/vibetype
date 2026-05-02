@@ -52,6 +52,15 @@ struct SettingsView: View {
 
             whisperStatusRow
 
+            Divider()
+
+            VStack(alignment: .leading, spacing: 6) {
+                Toggle("Gemma 후처리 사용 (실험적)", isOn: $state.useGemmaPostProcessing)
+                Text("Whisper 결과를 Gemma로 한 번 더 다듬습니다. 매끄러움 ↑, 속도 ↓ (+1~3초), 메모리 +1.5GB. 끄면 Whisper 결과가 즉시 입력됩니다.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
             Spacer()
         }
         .frame(maxWidth: .infinity, alignment: .leading)

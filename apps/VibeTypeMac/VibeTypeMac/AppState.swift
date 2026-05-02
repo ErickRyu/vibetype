@@ -29,8 +29,16 @@ final class AppState {
 
     var lastError: String?
 
+    /// Gemma 후처리(구두점/포맷 보정) 사용 여부.
+    /// 디폴트 OFF — Whisper turbo 단독으로도 한국어 구두점/숫자/띄어쓰기가 양호하고,
+    /// Gemma는 +1~3초 + ~1.5GB 비용 + 결과를 잘라낼 위험이 있음.
+    var useGemmaPostProcessing: Bool = false {
+        didSet { UserDefaults.standard.set(useGemmaPostProcessing, forKey: Self.gemmaToggleKey) }
+    }
+
     private static let modelKey = "vibetype.selectedModel"
     private static let whisperKey = "vibetype.selectedWhisper"
+    private static let gemmaToggleKey = "vibetype.useGemmaPostProcessing"
 
     init() {
         if let saved = UserDefaults.standard.string(forKey: Self.modelKey),
@@ -40,6 +48,10 @@ final class AppState {
         if let saved = UserDefaults.standard.string(forKey: Self.whisperKey),
            VibeTypeWhisperRegistry.model(byID: saved) != nil {
             self.selectedWhisperID = saved
+        }
+        // 키가 존재하면 그 값을, 없으면 디폴트(false) 유지.
+        if UserDefaults.standard.object(forKey: Self.gemmaToggleKey) != nil {
+            self.useGemmaPostProcessing = UserDefaults.standard.bool(forKey: Self.gemmaToggleKey)
         }
     }
 
