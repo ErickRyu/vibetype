@@ -77,10 +77,17 @@ public actor WhisperEngine {
     }
 
     /// 메모리상의 16kHz mono float 샘플 배열 받아쓰기 (Mac 앱 마이크 입력).
-    public func transcribe(audioArray: [Float], language: String? = "ko") async throws -> String {
+    /// 진행률 콜백은 토큰 생성에 따라 0~1 값을 받음. WhisperKit의 chunk 기반
+    /// progress는 짧은 오디오에서 무용지물이라 sampleLength 대비 token 수로 계산.
+    public func transcribe(
+        audioArray: [Float],
+        language: String? = "ko",
+        onProgress: (@Sendable (Double) -> Void)? = nil
+    ) async throws -> String {
         guard let whisper else { throw WhisperEngineError.modelNotLoaded }
         guard !audioArray.isEmpty else { throw WhisperEngineError.invalidAudio }
 
+        let sampleLength = 224
         let options = DecodingOptions(
             verbose: false,
             task: .transcribe,
@@ -88,7 +95,7 @@ public actor WhisperEngine {
             temperature: 0.0,
             temperatureIncrementOnFallback: 0.2,
             temperatureFallbackCount: 3,
-            sampleLength: 224,
+            sampleLength: sampleLength,
             usePrefillPrompt: true,
             skipSpecialTokens: true,
             withoutTimestamps: true,
@@ -96,7 +103,13 @@ public actor WhisperEngine {
         )
 
         do {
-            let results = try await whisper.transcribe(audioArray: audioArray, decodeOptions: options)
+            let results = try await whisper.transcribe(audioArray: audioArray, decodeOptions: options) { progress in
+                let tokenCount = progress.tokens.count
+                let fraction = min(1.0, Double(tokenCount) / Double(sampleLength))
+                onProgress?(fraction)
+                return nil  // continue generation
+            }
+            onProgress?(1.0)
             return results.map(\.text).joined(separator: " ")
                 .trimmingCharacters(in: .whitespacesAndNewlines)
         } catch {

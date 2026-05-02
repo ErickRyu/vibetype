@@ -113,16 +113,14 @@ final class DictationCoordinator {
                     }
                 }
                 log.info("whisper transcribing...")
-                let progressTask = Task { @MainActor [weak self] in
-                    while !Task.isCancelled {
-                        let p = await WhisperEngine.shared.currentProgressFraction
-                        self?.transition(to: .transcribing(progress: p))
-                        try? await Task.sleep(nanoseconds: 100_000_000)
+                raw = try await WhisperEngine.shared.transcribe(
+                    audioArray: samples,
+                    language: "ko"
+                ) { fraction in
+                    Task { @MainActor [weak self] in
+                        self?.transition(to: .transcribing(progress: fraction))
                     }
                 }
-                defer { progressTask.cancel() }
-                raw = try await WhisperEngine.shared.transcribe(audioArray: samples, language: "ko")
-                progressTask.cancel()
                 log.info("whisper transcribed: \(raw)")
             } catch {
                 log.error("whisper failed: \(String(describing: error))")
