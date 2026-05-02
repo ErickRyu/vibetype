@@ -15,9 +15,6 @@ enum AudioRecorderError: Error, LocalizedError {
     }
 }
 
-/// AVAudioEngine 실시간 콜백은 audio realtime 큐에서 호출되므로
-/// MainActor 격리 클래스에서 직접 mutate하면 strict concurrency assertion에 걸린다.
-/// 락으로 보호되는 Sendable 버퍼로 분리.
 final class AudioSampleBuffer: @unchecked Sendable {
     private let lock = NSLock()
     private var storage: [Float] = []
@@ -45,11 +42,14 @@ final class AudioSampleBuffer: @unchecked Sendable {
     }
 }
 
-@MainActor
-final class AudioRecorder {
+/// AVAudioEngine 콜백은 audio realtime 큐에서 호출되므로 MainActor 격리 클래스로
+/// 만들면 Swift 6 runtime assert에 걸린다. 따라서 nonisolated 클래스로 두고
+/// 내부 가변 상태는 NSLock + Sendable 버퍼로 보호한다.
+final class AudioRecorder: @unchecked Sendable {
     private let engine = AVAudioEngine()
     private let targetSampleRate: Double = 16_000
     private let buffer = AudioSampleBuffer()
+    private let stateLock = NSLock()
     private var converter: AVAudioConverter?
     private var isRecording = false
 
@@ -68,7 +68,10 @@ final class AudioRecorder {
     }
 
     func start() throws {
-        guard !isRecording else { return }
+        stateLock.lock()
+        if isRecording { stateLock.unlock(); return }
+        stateLock.unlock()
+
         guard Self.permissionStatus == .authorized else {
             throw AudioRecorderError.permissionDenied
         }
@@ -85,21 +88,32 @@ final class AudioRecorder {
         ) else {
             throw AudioRecorderError.engineFailure("16kHz mono Float32 포맷 생성 실패")
         }
-
         guard let converter = AVAudioConverter(from: inputFormat, to: targetFormat) else {
             throw AudioRecorderError.engineFailure("샘플레이트 컨버터 생성 실패")
         }
-        self.converter = converter
 
-        // Realtime 콜백: capture-list로 Sendable 값들만 받아 actor 격리에서 벗어남.
+        stateLock.lock()
+        self.converter = converter
+        stateLock.unlock()
+
         let bufferRef = self.buffer
-        inputNode.installTap(onBus: 0, bufferSize: 4096, format: inputFormat) { inputBuffer, _ in
-            Self.processBuffer(inputBuffer, converter: converter, targetFormat: targetFormat, into: bufferRef)
+        // capture-list: AVAudioConverter는 Sendable이 아니지만 동일 큐(audio realtime)
+        // 에서만 사용되므로 안전. @Sendable 명시로 격리 검증 우회.
+        inputNode.installTap(onBus: 0, bufferSize: 4096, format: inputFormat) {
+            @Sendable [converter, targetFormat, bufferRef] inputBuffer, _ in
+            Self.processBuffer(
+                inputBuffer,
+                converter: converter,
+                targetFormat: targetFormat,
+                into: bufferRef
+            )
         }
 
         do {
             try engine.start()
+            stateLock.lock()
             isRecording = true
+            stateLock.unlock()
         } catch {
             inputNode.removeTap(onBus: 0)
             throw AudioRecorderError.engineFailure(String(describing: error))
@@ -107,20 +121,32 @@ final class AudioRecorder {
     }
 
     func stop() throws -> [Float] {
-        guard isRecording else { throw AudioRecorderError.noActiveRecording }
+        stateLock.lock()
+        guard isRecording else { stateLock.unlock(); throw AudioRecorderError.noActiveRecording }
+        stateLock.unlock()
+
         engine.inputNode.removeTap(onBus: 0)
         engine.stop()
+
+        stateLock.lock()
         isRecording = false
         converter = nil
+        stateLock.unlock()
         return buffer.drain()
     }
 
     func cancel() {
-        guard isRecording else { return }
+        stateLock.lock()
+        guard isRecording else { stateLock.unlock(); return }
+        stateLock.unlock()
+
         engine.inputNode.removeTap(onBus: 0)
         engine.stop()
+
+        stateLock.lock()
         isRecording = false
         converter = nil
+        stateLock.unlock()
         buffer.clear()
     }
 
@@ -128,9 +154,7 @@ final class AudioRecorder {
         Double(buffer.count()) / targetSampleRate
     }
 
-    /// nonisolated static — 어떤 실행 컨텍스트에서도 호출 가능.
-    /// AVAudioConverter는 Sendable이 아니지만 동일 큐에서만 사용되므로 안전.
-    private nonisolated static func processBuffer(
+    private static func processBuffer(
         _ inputBuffer: AVAudioPCMBuffer,
         converter: AVAudioConverter,
         targetFormat: AVAudioFormat,
