@@ -17,6 +17,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var fnMonitor: FnKeyMonitor?
     private var dictation: DictationCoordinator?
     private var textRewrite: ActionCoordinator?
+    private var hud: DictationHUDWindow?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
@@ -27,11 +28,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         self.dictation = dictation
         self.textRewrite = textRewrite
 
+        let hud = DictationHUDWindow()
+        hud.onCancel = { [weak dictation] in dictation?.cancelRecording() }
+        self.hud = hud
+
+        // 상태 변화를 메뉴바 + HUD 양쪽에 전달.
         dictation.onStateChange = { [weak self] state in
             self?.menuBarController?.updateDictationState(state)
+            self?.hud?.update(state: state)
         }
 
-        // Fn 키 push-to-talk: 누르면 녹음 시작, 떼면 처리.
+        // Fn 키 push-to-talk
         self.fnMonitor = FnKeyMonitor { [weak dictation] pressed in
             guard let dictation else { return }
             if pressed {
@@ -45,8 +52,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
 
-        // KeyboardShortcuts: 보너스 텍스트 액션만 (디폴트 미할당).
-        // 받아쓰기는 Fn 키 모니터로 처리.
+        // KeyboardShortcuts: 보너스 텍스트 액션 (디폴트 미할당) + 옵션 dictation 토글
         self.hotkeyManager = HotkeyManager(
             onDictationToggle: { [weak dictation] in
                 guard let dictation else { return }
@@ -68,6 +74,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         hotkeyManager = nil
         dictation = nil
         textRewrite = nil
+        hud = nil
         menuBarController = nil
     }
 }

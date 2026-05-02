@@ -86,10 +86,7 @@ final class DictationCoordinator {
         log.info("recorded duration: \(durationSeconds)s")
         guard durationSeconds >= 0.4, !samples.isEmpty else {
             log.warning("recording too short (<400ms) or empty — skipping")
-            NotificationPresenter.show(
-                title: "녹음이 너무 짧습니다",
-                body: "Fn 키를 좀 더 오래 누른 채 말해주세요 (최소 0.4초)."
-            )
+            transition(to: .failed("너무 짧습니다. Fn을 더 오래 눌러 주세요."))
             transition(to: .idle)
             return
         }
@@ -106,18 +103,11 @@ final class DictationCoordinator {
             let raw: String
             do {
                 if appState.whisperState != .ready {
-                    NotificationPresenter.show(
-                        title: "Whisper 모델 로드 중",
-                        body: "첫 실행 시 5분 정도 걸립니다. 메뉴바 → 설정 → 받아쓰기 탭에서 진행 상황을 확인하세요. 로드가 끝난 뒤 다시 Fn 키를 누르면 됩니다."
-                    )
                     log.info("triggering whisper load")
                     await appState.ensureWhisperLoaded()
                     guard appState.whisperState == .ready else {
                         log.error("whisper load failed: \(appState.lastError ?? "unknown")")
-                        NotificationPresenter.show(
-                            title: "Whisper 모델 로드 실패",
-                            body: appState.lastError ?? "다시 시도해 주세요."
-                        )
+                        self.transition(to: .failed("Whisper 모델 로드 실패"))
                         return
                     }
                 }
@@ -126,16 +116,13 @@ final class DictationCoordinator {
                 log.info("whisper transcribed: \(raw)")
             } catch {
                 log.error("whisper failed: \(String(describing: error))")
-                NotificationPresenter.show(title: "음성 인식 실패", body: String(describing: error))
+                self.transition(to: .failed("음성 인식 실패"))
                 return
             }
 
             if DictationPostProcessor.shouldSkip(rawTranscript: raw) {
                 log.warning("post-processor skipped — empty/short transcript")
-                NotificationPresenter.show(
-                    title: "인식 결과 없음",
-                    body: "음성이 너무 작거나 짧았습니다. 다시 시도해 주세요."
-                )
+                self.transition(to: .failed("인식 결과 없음"))
                 return
             }
 
@@ -183,10 +170,8 @@ final class DictationCoordinator {
                     log.error("both pasteboard and AX failed: \(String(describing: error))")
                     NSPasteboard.general.clearContents()
                     NSPasteboard.general.setString(finalText, forType: .string)
-                    NotificationPresenter.show(
-                        title: "텍스트 삽입 실패",
-                        body: "결과(\(finalText.prefix(30))…)는 클립보드에 복사되었습니다. ⌘V로 붙여넣어 주세요."
-                    )
+                    self.transition(to: .failed("결과를 클립보드에 복사했습니다. ⌘V로 붙여넣어 주세요."))
+                    return
                 }
             }
         }
