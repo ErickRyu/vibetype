@@ -28,6 +28,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         self.dictation = dictation
         self.textRewrite = textRewrite
 
+        // 첫 Fn 사용 시점에 다이얼로그가 뜨지 않도록 앱 시작 시 권한 요청.
+        Task { @MainActor in
+            await dictation.prefetchPermission()
+        }
+
         let hud = DictationHUDWindow()
         hud.onCancel = { [weak dictation] in dictation?.cancelRecording() }
         self.hud = hud

@@ -25,6 +25,10 @@ final class DictationCoordinator {
     private let recorder = AudioRecorder()
     private(set) var state: State = .idle
     private var pipelineTask: Task<Void, Never>?
+    /// 같은 세션에서 권한 알림을 반복 표시하지 않도록 캐시.
+    private var didWarnPermissionDenied = false
+    /// 권한 요청 도중 추가 Fn 입력이 들어와도 무시.
+    private var permissionRequestInFlight = false
 
     /// State 변화에 반응할 옵저버 (메뉴바 인디케이터 갱신용).
     var onStateChange: (@MainActor (State) -> Void)?
@@ -39,17 +43,43 @@ final class DictationCoordinator {
             log.warning("startRecording skipped — state is \(String(describing: self.state))")
             return
         }
-        Task { @MainActor in
-            let granted = await AudioRecorder.requestPermission()
-            guard granted else {
-                log.error("microphone permission denied")
-                self.transition(to: .failed("마이크 권한이 없습니다."))
-                NotificationPresenter.show(
-                    title: "마이크 권한 필요",
-                    body: "System Settings → Privacy & Security → Microphone에서 VibeType을 허용해 주세요."
-                )
+        // 권한 요청 진행 중이면 중복 호출 무시 (Fn 연타로 인한 다이얼로그 누적 방지).
+        if permissionRequestInFlight {
+            log.warning("permission request in flight, skipping")
+            return
+        }
+
+        // 빠른 경로: 이미 권한이 .authorized면 다이얼로그 없이 즉시 시작.
+        let status = AudioRecorder.permissionStatus
+        if status == .denied || status == .restricted {
+            log.error("microphone permission denied")
+            if !didWarnPermissionDenied {
+                didWarnPermissionDenied = true
+                self.transition(to: .failed("마이크 권한 거부됨 — System Settings 확인"))
+                openMicSettings()
                 self.transition(to: .idle)
-                return
+            } else {
+                self.transition(to: .failed("마이크 권한 거부됨"))
+                self.transition(to: .idle)
+            }
+            return
+        }
+
+        Task { @MainActor in
+            if status == .notDetermined {
+                self.permissionRequestInFlight = true
+                let granted = await AudioRecorder.requestPermission()
+                self.permissionRequestInFlight = false
+                guard granted else {
+                    log.error("microphone permission not granted")
+                    if !self.didWarnPermissionDenied {
+                        self.didWarnPermissionDenied = true
+                        self.openMicSettings()
+                    }
+                    self.transition(to: .failed("마이크 권한 거부됨"))
+                    self.transition(to: .idle)
+                    return
+                }
             }
 
             do {
@@ -58,11 +88,26 @@ final class DictationCoordinator {
                 self.transition(to: .recording)
             } catch {
                 log.error("recording start failed: \(String(describing: error))")
-                self.transition(to: .failed(String(describing: error)))
-                NotificationPresenter.show(title: "녹음 시작 실패", body: String(describing: error))
+                self.transition(to: .failed("녹음 시작 실패"))
                 self.transition(to: .idle)
             }
         }
+    }
+
+    private func openMicSettings() {
+        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone") {
+            NSWorkspace.shared.open(url)
+        }
+    }
+
+    /// 앱 시작 시 권한을 사전 요청해 첫 Fn 사용 때 다이얼로그가 뜨지 않도록.
+    /// 거부되어도 didWarnPermissionDenied만 표시 후 silent.
+    func prefetchPermission() async {
+        let status = AudioRecorder.permissionStatus
+        guard status == .notDetermined else { return }
+        permissionRequestInFlight = true
+        _ = await AudioRecorder.requestPermission()
+        permissionRequestInFlight = false
     }
 
     func stopRecordingAndProcess() {
