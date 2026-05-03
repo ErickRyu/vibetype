@@ -1,0 +1,81 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version tag (예: v0.1.0)'
+        required: true
+
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 60
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select latest Xcode
+        run: sudo xcode-select -s /Applications/Xcode_16.app
+
+      - name: Show toolchain info
+        run: |
+          xcodebuild -version
+          swift --version
+
+      - name: Install Metal Toolchain (Xcode 26+ runners)
+        run: xcodebuild -downloadComponent MetalToolchain || true
+
+      - name: Install build tools
+        run: |
+          brew install xcodegen create-dmg
+
+      - name: Import Developer ID certificate
+        if: env.MACOS_CERTIFICATE != ''
+        env:
+          MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE_BASE64 }}
+        uses: apple-actions/import-codesign-certs@v3
+        with:
+          p12-file-base64: ${{ secrets.MACOS_CERTIFICATE_BASE64 }}
+          p12-password: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+
+      - name: Build (signed + notarized)
+        if: env.DEVELOPER_ID_APP != ''
+        env:
+          DEVELOPER_ID_APP: ${{ secrets.DEVELOPER_ID_APP }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+        run: ./scripts/release.sh --sign --notarize
+
+      - name: Build (unsigned, fallback)
+        if: env.DEVELOPER_ID_APP == ''
+        env:
+          DEVELOPER_ID_APP: ${{ secrets.DEVELOPER_ID_APP }}
+        run: ./scripts/release.sh
+
+      - name: Generate release notes from CHANGELOG
+        id: notes
+        run: |
+          VERSION="${GITHUB_REF_NAME:-${{ github.event.inputs.version }}}"
+          VERSION_NUMBER="${VERSION#v}"
+          # 해당 버전 섹션만 추출 (## [VERSION] 다음부터 다음 ## 직전까지)
+          awk "/^## \\[$VERSION_NUMBER\\]/{flag=1; next} /^## /{flag=0} flag" CHANGELOG.md > release-notes.md
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.notes.outputs.version }}
+          name: VibeType ${{ steps.notes.outputs.version }}
+          body_path: release-notes.md
+          files: |
+            dist/VibeType.dmg
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

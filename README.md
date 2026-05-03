@@ -136,6 +136,45 @@ make release-notarize
 - **Accessibility** — 받아쓰기 결과를 다른 앱에 입력
 - 두 권한 모두 System Settings → Privacy & Security에서 직접 grant 필요
 
+## GitHub Releases 자동 배포
+
+`v*.*.*` 형태의 태그를 push하면 GitHub Actions가 자동으로:
+1. Release 빌드
+2. Developer ID 서명
+3. Apple 노타라이즈
+4. DMG 생성
+5. GitHub Release 게시 (CHANGELOG에서 해당 버전 섹션을 release notes로)
+
+### 1회 셋업: GitHub repo Secrets 등록
+
+Repo → Settings → Secrets and variables → Actions에 다음 6개 등록:
+
+| Secret 이름 | 값 |
+|---|---|
+| `MACOS_CERTIFICATE_BASE64` | Developer ID Application `.p12`를 `base64 -i cert.p12 \| pbcopy`로 인코딩 |
+| `MACOS_CERTIFICATE_PASSWORD` | `.p12` 비밀번호 |
+| `DEVELOPER_ID_APP` | `Developer ID Application: 사용자이름 (TEAM_ID)` |
+| `APPLE_TEAM_ID` | 10자리 팀 ID |
+| `APPLE_ID` | Apple ID 이메일 |
+| `APPLE_APP_PASSWORD` | App-specific password |
+
+Secrets 미등록 시 Actions는 unsigned 빌드만 수행 (배포는 가능하나 Gatekeeper 경고).
+
+### 새 버전 배포
+
+```bash
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+### 인증서 추출 (1회)
+
+```bash
+# Keychain Access → "Developer ID Application" 인증서 우클릭 → 내보내기 → .p12
+base64 -i path/to/cert.p12 | pbcopy
+# 클립보드의 base64 문자열을 GitHub Secret 'MACOS_CERTIFICATE_BASE64'에 붙여넣기
+```
+
 ## 라이선스
 
-(추후 결정)
+[MIT](./LICENSE)
