@@ -29,6 +29,9 @@ final class DictationCoordinator {
     private var didWarnPermissionDenied = false
     /// 권한 요청 도중 추가 Fn 입력이 들어와도 무시.
     private var permissionRequestInFlight = false
+    /// ad-hoc 서명 환경에서 macOS가 매번 .notDetermined를 보고하더라도
+    /// 한 세션에 권한 요청은 최대 1회만 트리거되도록 직접 캐시.
+    private var hasRequestedPermissionThisSession = false
 
     /// State 변화에 반응할 옵저버 (메뉴바 인디케이터 갱신용).
     var onStateChange: (@MainActor (State) -> Void)?
@@ -66,8 +69,11 @@ final class DictationCoordinator {
         }
 
         Task { @MainActor in
-            if status == .notDetermined {
+            // ad-hoc 서명 환경에서 macOS가 매번 .notDetermined로 보고할 수 있어
+            // 세션당 최대 1회만 requestPermission 호출. 이미 요청한 적 있으면 그냥 시도.
+            if status == .notDetermined && !self.hasRequestedPermissionThisSession {
                 self.permissionRequestInFlight = true
+                self.hasRequestedPermissionThisSession = true
                 let granted = await AudioRecorder.requestPermission()
                 self.permissionRequestInFlight = false
                 guard granted else {
@@ -106,6 +112,7 @@ final class DictationCoordinator {
         let status = AudioRecorder.permissionStatus
         guard status == .notDetermined else { return }
         permissionRequestInFlight = true
+        hasRequestedPermissionThisSession = true
         _ = await AudioRecorder.requestPermission()
         permissionRequestInFlight = false
     }

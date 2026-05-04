@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.2] — 2026-05-04
+
+### Fixed
+- **마이크 권한 다이얼로그 매 Fn마다 반복**: ad-hoc 서명 환경에서 macOS가 grant 후에도 `.notDetermined`를 매번 리포트하는 케이스 우회. `DictationCoordinator`가 세션 내 권한 요청 1회 캐시(`hasRequestedPermissionThisSession`). 두 번째 Fn부터는 다이얼로그 없이 `recorder.start()` 직접 시도.
+- **AudioRecorder.start 권한 가드 완화**: `.denied`/`.restricted`만 명시 throw, `.notDetermined`은 `engine.start()`로 위임. ad-hoc 서명에서의 status 부정확성 우회.
+- **트러블슈팅 안내 추가**: 그래도 권한 다이얼로그가 반복되면 `tccutil reset Microphone com.vibetype.mac` 후 앱 재실행.
+
 ## [0.1.1] — 2026-05-04
 
 ### Fixed

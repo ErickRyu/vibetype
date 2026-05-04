@@ -138,6 +138,18 @@ make release-notarize
 
 > 💡 **DMG 설치 시 권장:** 다운로드한 `VibeType.app`을 `/Applications`로 옮긴 뒤 우클릭 → "열기"로 실행. 매번 다른 위치에서 실행하면 unsigned 빌드 특성상 macOS가 다른 앱으로 인식해 권한 다이얼로그를 다시 묻습니다.
 
+#### 마이크 권한 다이얼로그가 반복되면
+
+System Settings → Privacy & Security → Microphone에서 VibeType 토글을 확인:
+- 토글이 **OFF**라면 ON으로 바꾸고 앱 재실행
+- 토글이 **ON인데도** 매번 다이얼로그가 뜨면 unsigned 빌드의 TCC 일관성 한계입니다. 다음을 한 번 실행 후 앱 재실행:
+
+```bash
+tccutil reset Microphone com.vibetype.mac
+```
+
+근본 해결은 Developer ID 서명(향후 release).
+
 ## GitHub Releases 자동 배포
 
 `v*.*.*` 형태의 태그를 push하면 GitHub Actions가 자동으로:

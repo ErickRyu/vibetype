@@ -72,7 +72,11 @@ final class AudioRecorder: @unchecked Sendable {
         if isRecording { stateLock.unlock(); return }
         stateLock.unlock()
 
-        guard Self.permissionStatus == .authorized else {
+        // .denied/.restricted만 명시 throw. ad-hoc 서명 환경에서 macOS가
+        // 권한 grant를 받았어도 .notDetermined를 보고하는 케이스가 있으므로
+        // 그 상태도 engine.start()로 위임 — 실패하면 그때 throw.
+        let status = Self.permissionStatus
+        if status == .denied || status == .restricted {
             throw AudioRecorderError.permissionDenied
         }
 
