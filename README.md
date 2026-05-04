@@ -136,6 +136,8 @@ make release-notarize
 - **Accessibility** — 받아쓰기 결과를 다른 앱에 입력
 - 두 권한 모두 System Settings → Privacy & Security에서 직접 grant 필요
 
+> 💡 **DMG 설치 시 권장:** 다운로드한 `VibeType.app`을 `/Applications`로 옮긴 뒤 우클릭 → "열기"로 실행. 매번 다른 위치에서 실행하면 unsigned 빌드 특성상 macOS가 다른 앱으로 인식해 권한 다이얼로그를 다시 묻습니다.
+
 ## GitHub Releases 자동 배포
 
 `v*.*.*` 형태의 태그를 push하면 GitHub Actions가 자동으로:

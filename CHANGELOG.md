@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.1] — 2026-05-04
+
+### Fixed
+- **마이크 / Documents 권한 다이얼로그 반복**: WhisperKit 모델 캐시 위치를 `~/Documents/huggingface/...`에서 `~/Library/Application Support/VibeType/whisperkit/`로 이동. macOS Sonoma+의 Documents TCC 다이얼로그가 매 실행마다 뜨던 문제 해소.
+- **v0.1.0 사용자 자동 마이그레이션**: 기존 ~/Documents 캐시가 있으면 silent move (권한 거부되면 새 위치에서 재다운로드).
+- **Chrome / Safari 등 브라우저 입력창 붙여넣기 실패**: Pasteboard ⌘V 폴백이 changeCount 변화를 감지 못 하면 명시적 throw하여 AX 폴백을 자동 시도. 클립보드 복원 대기 시간 100ms → 250ms (브라우저의 비동기 paste 처리 대응). deadline 400ms → 700ms.
+
 ## [0.1.0] — 2026-05-03
 
 첫 공개 릴리스. 100% 로컬 음성 받아쓰기 키보드.

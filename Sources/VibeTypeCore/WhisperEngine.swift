@@ -48,9 +48,13 @@ public actor WhisperEngine {
     public func load(model: WhisperModelInfo) async throws {
         if loadedModelID == model.id, whisper != nil { return }
 
+        // v0.1.0 사용자의 기존 ~/Documents 캐시를 새 Application Support 위치로 silent 이동.
+        VibeTypeWhisperRegistry.migrateCacheIfNeeded(for: model)
+
         do {
             let config = WhisperKitConfig(
                 model: model.whisperKitName,
+                modelFolder: VibeTypeWhisperRegistry.cacheDirectory(for: model).path,
                 verbose: false,
                 logLevel: .error,
                 prewarm: false,

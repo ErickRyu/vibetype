@@ -30,6 +30,8 @@ enum PasteboardFallback {
     }
 
     /// 새 텍스트를 클립보드에 넣고 ⌘V로 붙여넣은 후 원래 클립보드를 복원한다.
+    /// changeCount 변화를 deadline까지 못 보면 paste가 도달하지 못한 것으로 간주하여
+    /// `pasteNotObserved`를 throw — 호출자가 AX 폴백을 시도하도록.
     static func paste(_ text: String, restoring snapshot: ClipboardSnapshot) async throws {
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
@@ -38,14 +40,26 @@ enum PasteboardFallback {
 
         try sendKeystroke(keyCode: kVK_ANSI_V, modifiers: [.maskCommand])
 
-        // ⌘V가 처리될 시간을 changeCount 변화로 감지하거나 최대 400ms 대기.
-        let deadline = Date().addingTimeInterval(0.4)
+        // ⌘V가 처리될 시간을 changeCount 변화로 감지. 브라우저 등 비동기 처리 앱은 느릴 수 있어 700ms 여유.
+        let deadline = Date().addingTimeInterval(0.7)
+        var observed = false
         while Date() < deadline {
-            if pasteboard.changeCount != afterWrite { break }
+            if pasteboard.changeCount != afterWrite {
+                observed = true
+                break
+            }
             try await Task.sleep(nanoseconds: 30_000_000)
         }
-        // 충분한 처리 시간을 추가로 둔 뒤 원본 복원.
-        try await Task.sleep(nanoseconds: 100_000_000)
+
+        guard observed else {
+            // ⌘V가 아예 도달 못한 케이스 (Chrome/Safari 일부 입력창 등). 호출자가 AX 폴백 시도.
+            snapshot.restore()
+            throw PasteboardError.pasteNotObserved
+        }
+
+        // 일부 앱은 paste를 비동기로 처리해 changeCount 변화 직후에 클립보드를 읽는다.
+        // 너무 빠른 복원은 paste 결과를 무효화시키므로 250ms 추가 대기.
+        try await Task.sleep(nanoseconds: 250_000_000)
         snapshot.restore()
     }
 
@@ -70,11 +84,13 @@ enum PasteboardFallback {
 enum PasteboardError: Error, LocalizedError {
     case nothingCopied
     case cgEventCreationFailed
+    case pasteNotObserved
 
     var errorDescription: String? {
         switch self {
         case .nothingCopied:           return "선택된 텍스트가 없거나 클립보드 캡처에 실패했습니다."
         case .cgEventCreationFailed:   return "키 이벤트 생성에 실패했습니다."
+        case .pasteNotObserved:        return "⌘V 시뮬레이션 후 클립보드 변화가 감지되지 않았습니다 (앱이 ⌘V를 가로챘거나 대상 입력창에 포커스가 없음)."
         }
     }
 }

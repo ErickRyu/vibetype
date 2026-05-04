@@ -39,6 +39,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // 첫 실행(다운로드 미완료)에서는 자동 트리거하지 않음 — 사용자가 Settings에서 명시 시작.
         Task { @MainActor in
             let state = AppState.shared
+            // v0.1.0 ~/Documents 캐시를 새 위치로 silent 마이그레이션.
+            VibeTypeWhisperRegistry.migrateCacheIfNeeded(for: state.selectedWhisper)
             guard state.whisperState == .notLoaded,
                   VibeTypeWhisperRegistry.isModelCached(state.selectedWhisper) else { return }
             await state.ensureWhisperLoaded()

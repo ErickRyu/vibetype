@@ -111,8 +111,26 @@ public enum VibeTypeWhisperRegistry {
         return small
     }
 
-    /// WhisperKit이 모델을 다운로드해 두는 캐시 디렉토리 (~/Documents/huggingface/...).
+    /// WhisperKit이 모델을 다운로드해 두는 캐시 부모 디렉토리.
+    /// `~/Library/Application Support/VibeType/whisperkit/`로 두어 macOS Sonoma+의
+    /// Documents TCC 다이얼로그를 회피한다. WhisperKitConfig.modelFolder로 전달된다.
+    public static func cacheBaseDirectory() -> URL {
+        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+            ?? URL(fileURLWithPath: NSHomeDirectory())
+                .appendingPathComponent("Library", isDirectory: true)
+                .appendingPathComponent("Application Support", isDirectory: true)
+        return appSupport
+            .appendingPathComponent("VibeType", isDirectory: true)
+            .appendingPathComponent("whisperkit", isDirectory: true)
+    }
+
+    /// 특정 모델의 캐시 디렉토리.
     public static func cacheDirectory(for model: WhisperModelInfo) -> URL {
+        cacheBaseDirectory().appendingPathComponent(model.whisperKitName, isDirectory: true)
+    }
+
+    /// v0.1.0까지 사용한 ~/Documents/huggingface/... 경로. 마이그레이션 source로만 사용.
+    public static func legacyDocumentsDirectory(for model: WhisperModelInfo) -> URL {
         let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first
             ?? URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent("Documents")
         return documents
@@ -126,7 +144,10 @@ public enum VibeTypeWhisperRegistry {
     /// 모델이 사용자 기기에 이미 다운로드되어 있는지 검사.
     /// 캐시 디렉토리에 .mlmodelc 번들이 하나라도 존재하면 true.
     public static func isModelCached(_ model: WhisperModelInfo) -> Bool {
-        let dir = cacheDirectory(for: model)
+        isModelCached(at: cacheDirectory(for: model))
+    }
+
+    private static func isModelCached(at dir: URL) -> Bool {
         let fm = FileManager.default
         var isDir: ObjCBool = false
         guard fm.fileExists(atPath: dir.path, isDirectory: &isDir), isDir.boolValue else {
@@ -136,5 +157,19 @@ public enum VibeTypeWhisperRegistry {
             return false
         }
         return contents.contains(where: { $0.hasSuffix(".mlmodelc") })
+    }
+
+    /// 새 캐시 위치가 비어 있고 v0.1.0 ~/Documents 위치에 모델이 있으면 이동을 시도한다.
+    /// Documents TCC가 거부하면 try?로 silent 무시 — 새 위치에서 다시 다운로드된다.
+    public static func migrateCacheIfNeeded(for model: WhisperModelInfo) {
+        let new = cacheDirectory(for: model)
+        if isModelCached(at: new) { return }
+
+        let old = legacyDocumentsDirectory(for: model)
+        guard isModelCached(at: old) else { return }
+
+        let fm = FileManager.default
+        try? fm.createDirectory(at: cacheBaseDirectory(), withIntermediateDirectories: true)
+        try? fm.moveItem(at: old, to: new)
     }
 }
