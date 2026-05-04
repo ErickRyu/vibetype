@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.6] — 2026-05-04
+
+### Added
+- **Developer ID 서명 + Apple Notarization**: GitHub Actions에 Apple Developer 인증서/Apple ID/App-specific password 등록 완료 → `release.sh --sign --notarize` 자동 동작. 사용자는 더블클릭만으로 실행 가능, Gatekeeper "위험할 수 있다" 경고 사라짐.
+
 ## [0.1.5] — 2026-05-04
 
 ### Fixed (진짜 권한 다이얼로그 반복 원인)
