@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.5] — 2026-05-04
+
+### Fixed (진짜 권한 다이얼로그 반복 원인)
+- **DMG 안의 `.app`이 codesign되지 않은 상태로 배포되던 문제**: `release.sh`의 `CODE_SIGNING_ALLOWED=NO`가 Xcode의 codesign 단계 전체를 skip시켜 `_CodeSignature/` + `Sealed Resources` 부재 → macOS TCC가 codesign hash로 앱을 식별 못해 매 startRecording마다 새 entity로 인식 → 권한 다이얼로그 매번 표시. v0.1.0~v0.1.4 모두 영향.
+- **해결**: `CODE_SIGN_IDENTITY=-` (ad-hoc) + `CODE_SIGNING_REQUIRED=YES`로 변경. unsigned 빌드도 ad-hoc 사인된 정상 .app으로 만들어진다.
+- **`Info.plist`에 `CFBundleShortVersionString`/`CFBundleVersion` 누락**: project.yml에 `MARKETING_VERSION` + `CURRENT_PROJECT_VERSION` 추가. macOS는 이 키 없으면 권한 grant 추적이 비정상.
+
 ## [0.1.4] — 2026-05-04
 
 ### Changed

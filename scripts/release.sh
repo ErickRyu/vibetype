@@ -48,7 +48,14 @@ if [ $DO_SIGN -eq 1 ]; then
     fi
     XCB+=("OTHER_CODE_SIGN_FLAGS=--timestamp")
 else
-    XCB+=("CODE_SIGNING_ALLOWED=NO")
+    # CODE_SIGNING_ALLOWED=NO는 Xcode가 .app/Contents/Frameworks/로
+    # Swift Package dependencies를 copy하는 build phase까지 skip시켜
+    # WhisperKit/MLX/VibeTypeCore가 누락된 broken .app을 만든다.
+    # ad-hoc 사인을 명시해 정상 .app을 만들고 codesign 자체만 ad-hoc으로 처리.
+    XCB+=("CODE_SIGN_IDENTITY=-")
+    XCB+=("CODE_SIGN_STYLE=Automatic")
+    XCB+=("CODE_SIGNING_REQUIRED=YES")
+    XCB+=("CODE_SIGNING_ALLOWED=YES")
 fi
 XCB+=(build)
 
