@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.3] — 2026-05-04
+
+### Fixed
+- **Fn 한 번에 권한 다이얼로그 다중 표시(9회)**: 두 곳의 race condition 차단.
+  - `FnKeyMonitor`: `addGlobalMonitor` + `addLocalMonitor`가 같은 `flagsChanged`를 양쪽에서 emit하거나 macOS가 한 번 누름에 multiple emit하는 케이스에서, dedup이 `Task @MainActor` 안에서 일어나 경합. NSLock 기반 sync dedup으로 콜백 도달 직후 차단.
+  - `DictationCoordinator.startRecording`: `permissionRequestInFlight=true`가 `Task` 내부에서 set되어, sync 다중 호출이 모두 첫 가드를 통과해 N개의 권한 요청 Task를 생성. flag를 sync set으로 옮겨 첫 호출만 통과.
+
 ## [0.1.2] — 2026-05-04
 
 ### Fixed

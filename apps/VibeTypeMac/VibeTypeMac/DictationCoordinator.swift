@@ -68,12 +68,17 @@ final class DictationCoordinator {
             return
         }
 
+        // ★ Race condition fix: permissionRequestInFlight를 Task 진입 전에 sync set.
+        //   startRecording이 동기적으로 다중 호출되어도 첫 호출만 통과, 나머지는 위
+        //   `if permissionRequestInFlight { return }` 에서 차단된다.
+        let needsRequest = status == .notDetermined && !hasRequestedPermissionThisSession
+        if needsRequest {
+            permissionRequestInFlight = true
+            hasRequestedPermissionThisSession = true
+        }
+
         Task { @MainActor in
-            // ad-hoc 서명 환경에서 macOS가 매번 .notDetermined로 보고할 수 있어
-            // 세션당 최대 1회만 requestPermission 호출. 이미 요청한 적 있으면 그냥 시도.
-            if status == .notDetermined && !self.hasRequestedPermissionThisSession {
-                self.permissionRequestInFlight = true
-                self.hasRequestedPermissionThisSession = true
+            if needsRequest {
                 let granted = await AudioRecorder.requestPermission()
                 self.permissionRequestInFlight = false
                 guard granted else {

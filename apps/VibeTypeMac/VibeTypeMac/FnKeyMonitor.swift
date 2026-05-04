@@ -15,7 +15,13 @@ final class FnKeyMonitor {
     private let onChange: Handler
     private var globalMonitor: Any?
     private var localMonitor: Any?
-    private var isFnDown = false
+
+    /// 콜백이 audio realtime/UI 큐에서 호출될 수 있어 NSLock으로 sync dedup.
+    /// global + local 모니터가 같은 이벤트를 둘 다 emit하거나 macOS가 한 번 누름에
+    /// multiple flagsChanged를 emit하는 케이스를 sync 단계에서 차단.
+    /// MainActor 클래스지만 이 두 변수는 nonisolated 콜백에서 접근하므로 별도 보호.
+    nonisolated(unsafe) private var isFnDownNonisolated = false
+    nonisolated(unsafe) private let stateLock = NSLock()
 
     init(onChange: @escaping Handler) {
         self.onChange = onChange
@@ -46,12 +52,17 @@ final class FnKeyMonitor {
         // Fn 키 자체의 keyCode는 0x3F. 다른 모디파이어(Cmd, Shift 등)의 flagsChanged는 무시.
         guard event.keyCode == 0x3F else { return }
         let pressed = event.modifierFlags.contains(.function)
+
+        // 1차 sync dedup: global/local 양쪽 monitor 또는 multiple flagsChanged emit을
+        // MainActor Task 도달 전에 차단. NSLock 안에서만 상태 변경.
+        stateLock.lock()
+        let changed = pressed != isFnDownNonisolated
+        if changed { isFnDownNonisolated = pressed }
+        stateLock.unlock()
+        guard changed else { return }
+
         Task { @MainActor [weak self] in
-            guard let self else { return }
-            if pressed != self.isFnDown {
-                self.isFnDown = pressed
-                self.onChange(pressed)
-            }
+            self?.onChange(pressed)
         }
     }
 }
