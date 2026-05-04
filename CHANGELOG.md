@@ -20,6 +20,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Gemma 후처리 옵션**: 디폴트 OFF(Whisper 단독), Settings에서 토글로 켤 수 있음.
 - **모델 6종 선택**: large-v3-turbo / large-v3 / full / small / base / tiny.
 - **단축키 리매핑**: 받아쓰기 + 보너스 텍스트 액션(Improve/FixGrammar/Translate/Summarize) 설정 가능.
+- **백그라운드 프리로드**: 앱 시작 시 모델 캐시가 있으면 자동 로드해 첫 받아쓰기 콜드 스타트 제거.
+- **idle 자동 언로드**: 15분 비활성 시 Whisper 모델을 메모리에서 자동 해제 (~1GB 회수).
 
 ### 시스템 요구사항
 - macOS 14+ (Apple Silicon)
