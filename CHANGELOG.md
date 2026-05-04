@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.4] — 2026-05-04
+
+### Changed
+- **마이크 권한 API를 AVAudioApplication으로 변경**: 기존 `AVCaptureDevice.requestAccess(for: .audio)`는 카메라/마이크 양쪽을 다루는 일반 API라 unsigned 빌드에서 일관성이 떨어진다는 보고가 있어, macOS 14+의 마이크 전용 `AVAudioApplication.requestRecordPermission`으로 교체.
+- **`AudioRecorder.requestPermission` 자체에 동시 호출 차단 + 결과 캐시 추가**: `OSAllocatedUnfairLock` 기반. 어떤 path로 호출되든 한 세션에 다이얼로그 최대 1회. `.granted`/`.denied` fast path + 캐시 hit 시 즉시 반환.
+- **권한 요청 흐름 진단 로그 강화** (`OSLog`): 콘솔에서 `category:AudioRecorder` 필터로 호출 횟수/시점 확인 가능.
+
+### Notes for Users
+- 이전 버전에서 권한 잔재 정리: `pkill -9 VibeType && tccutil reset Microphone com.vibetype.mac` 후 새 빌드 실행.
+
 ## [0.1.3] — 2026-05-04
 
 ### Fixed

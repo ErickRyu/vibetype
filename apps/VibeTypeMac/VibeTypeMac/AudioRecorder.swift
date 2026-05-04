@@ -1,5 +1,9 @@
 import AVFoundation
 import Foundation
+import OSLog
+import os
+
+private let log = Logger(subsystem: "com.vibetype.mac", category: "AudioRecorder")
 
 enum AudioRecorderError: Error, LocalizedError {
     case permissionDenied
@@ -53,18 +57,69 @@ final class AudioRecorder: @unchecked Sendable {
     private var converter: AVAudioConverter?
     private var isRecording = false
 
+    /// macOS 14+에서는 AVAudioApplication이 마이크 권한 전용 API.
+    /// AVCaptureDevice는 카메라/마이크 양쪽을 다루는 일반 API라 unsigned 빌드에서
+    /// 일관성이 떨어진다는 보고가 있음.
     static var permissionStatus: AVAuthorizationStatus {
-        AVCaptureDevice.authorizationStatus(for: .audio)
+        let raw = AVAudioApplication.shared.recordPermission
+        switch raw {
+        case .granted: return .authorized
+        case .denied: return .denied
+        case .undetermined: return .notDetermined
+        @unknown default: return .notDetermined
+        }
+    }
+
+    /// 동시 다중 호출 방지 + 결과 캐시. async-safe lock.
+    private struct PermissionState: Sendable {
+        var inFlight: Bool = false
+        var lastResult: Bool?
+    }
+    private static let permissionLock = OSAllocatedUnfairLock(initialState: PermissionState())
+
+    private enum PermissionAction {
+        case cached(Bool)
+        case skip
+        case proceed
     }
 
     static func requestPermission() async -> Bool {
-        if permissionStatus == .authorized { return true }
-        if permissionStatus == .denied || permissionStatus == .restricted { return false }
-        return await withCheckedContinuation { continuation in
-            AVCaptureDevice.requestAccess(for: .audio) { granted in
+        // 빠른 경로: 이미 결정된 결과면 즉시 반환.
+        let raw = AVAudioApplication.shared.recordPermission
+        if raw == .granted { return true }
+        if raw == .denied { return false }
+
+        // 캐시된 결과 또는 중복 요청 차단.
+        let action: PermissionAction = permissionLock.withLock { state in
+            if let cached = state.lastResult { return .cached(cached) }
+            if state.inFlight { return .skip }
+            state.inFlight = true
+            return .proceed
+        }
+
+        switch action {
+        case .cached(let granted):
+            log.info("requestPermission: returning cached \(granted)")
+            return granted
+        case .skip:
+            log.warning("requestPermission: already in flight, skipping duplicate dialog")
+            return false
+        case .proceed:
+            break
+        }
+
+        log.info("requestPermission: invoking AVAudioApplication.requestRecordPermission")
+        let granted: Bool = await withCheckedContinuation { continuation in
+            AVAudioApplication.requestRecordPermission { granted in
                 continuation.resume(returning: granted)
             }
         }
+        permissionLock.withLock { state in
+            state.lastResult = granted
+            state.inFlight = false
+        }
+        log.info("requestPermission: result = \(granted)")
+        return granted
     }
 
     func start() throws {
