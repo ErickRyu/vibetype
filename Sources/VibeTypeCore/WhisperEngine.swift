@@ -13,6 +13,7 @@ public actor WhisperEngine {
 
     private var whisper: WhisperKit?
     private var loadedModelID: String?
+    private var lastUsedAt: Date?
 
     public init() {}
 
@@ -23,6 +24,25 @@ public actor WhisperEngine {
     /// 호출자가 폴링해서 UI 갱신에 사용.
     public var currentProgressFraction: Double {
         whisper?.progress.fractionCompleted ?? 0
+    }
+
+    /// 마지막 사용 시점으로부터 경과한 초. 사용 기록이 없으면 nil.
+    public var secondsSinceLastUse: TimeInterval? {
+        guard let lastUsedAt else { return nil }
+        return Date().timeIntervalSince(lastUsedAt)
+    }
+
+    /// idle 시간이 threshold 이상이면 모델을 메모리에서 해제하고 true 반환.
+    public func unloadIfIdle(thresholdSeconds: TimeInterval) -> Bool {
+        guard whisper != nil,
+              let elapsed = secondsSinceLastUse,
+              elapsed >= thresholdSeconds else {
+            return false
+        }
+        whisper = nil
+        loadedModelID = nil
+        lastUsedAt = nil
+        return true
     }
 
     public func load(model: WhisperModelInfo) async throws {
@@ -47,6 +67,7 @@ public actor WhisperEngine {
     public func unload() {
         whisper = nil
         loadedModelID = nil
+        lastUsedAt = nil
     }
 
     /// 파일 경로 받아쓰기 (CLI 검증용).
@@ -69,9 +90,11 @@ public actor WhisperEngine {
 
         do {
             let results = try await whisper.transcribe(audioPath: audioPath, decodeOptions: options)
+            lastUsedAt = Date()
             return results.map(\.text).joined(separator: " ")
                 .trimmingCharacters(in: .whitespacesAndNewlines)
         } catch {
+            lastUsedAt = Date()
             throw WhisperEngineError.transcriptionFailed(String(describing: error))
         }
     }
@@ -110,9 +133,11 @@ public actor WhisperEngine {
                 return nil  // continue generation
             }
             onProgress?(1.0)
+            lastUsedAt = Date()
             return results.map(\.text).joined(separator: " ")
                 .trimmingCharacters(in: .whitespacesAndNewlines)
         } catch {
+            lastUsedAt = Date()
             throw WhisperEngineError.transcriptionFailed(String(describing: error))
         }
     }

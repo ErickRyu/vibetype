@@ -1,13 +1,13 @@
 import AppKit
 import VibeTypeCore
 
-/// 사용자가 단축키를 누르면:
+/// 사용자가 텍스트 다듬기 단축키를 누르면:
 /// 1) AX로 선택 텍스트 읽기 (실패 시 Pasteboard 폴백)
 /// 2) 모델이 준비되어 있는지 확인 (필요 시 로드)
 /// 3) Gemma 추론으로 결과 텍스트 생성
 /// 4) AX로 교체 (실패 시 ⌘V 폴백)
 @MainActor
-final class ActionCoordinator {
+final class TextRewriteCoordinator {
     private let appState: AppState
     private var inFlight: Task<Void, Never>?
 

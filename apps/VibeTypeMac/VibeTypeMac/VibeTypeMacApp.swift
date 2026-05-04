@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import VibeTypeCore
 
 @main
 struct VibeTypeMacApp: App {
@@ -16,21 +17,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var hotkeyManager: HotkeyManager?
     private var fnMonitor: FnKeyMonitor?
     private var dictation: DictationCoordinator?
-    private var textRewrite: ActionCoordinator?
+    private var textRewrite: TextRewriteCoordinator?
     private var hud: DictationHUDWindow?
+    private var idleMonitor: IdleUnloadMonitor?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
         menuBarController = MenuBarController()
 
         let dictation = DictationCoordinator(appState: AppState.shared)
-        let textRewrite = ActionCoordinator(appState: AppState.shared)
+        let textRewrite = TextRewriteCoordinator(appState: AppState.shared)
         self.dictation = dictation
         self.textRewrite = textRewrite
 
         // 첫 Fn 사용 시점에 다이얼로그가 뜨지 않도록 앱 시작 시 권한 요청.
         Task { @MainActor in
             await dictation.prefetchPermission()
+        }
+
+        // 캐시에 모델이 있으면 백그라운드에서 자동 로드 (콜드 스타트 단축).
+        // 첫 실행(다운로드 미완료)에서는 자동 트리거하지 않음 — 사용자가 Settings에서 명시 시작.
+        Task { @MainActor in
+            let state = AppState.shared
+            guard state.whisperState == .notLoaded,
+                  VibeTypeWhisperRegistry.isModelCached(state.selectedWhisper) else { return }
+            await state.ensureWhisperLoaded()
         }
 
         let hud = DictationHUDWindow()
@@ -71,9 +82,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 textRewrite?.invoke(action)
             }
         )
+
+        // idle 시 Whisper 자동 unload (15분 비활성).
+        let idleMonitor = IdleUnloadMonitor(appState: AppState.shared)
+        idleMonitor.start()
+        self.idleMonitor = idleMonitor
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        idleMonitor?.stop()
+        idleMonitor = nil
         fnMonitor?.stop()
         fnMonitor = nil
         hotkeyManager = nil

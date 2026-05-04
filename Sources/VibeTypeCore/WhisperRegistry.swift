@@ -110,4 +110,31 @@ public enum VibeTypeWhisperRegistry {
         if ramGB >= 8 { return largeV3Turbo }
         return small
     }
+
+    /// WhisperKit이 모델을 다운로드해 두는 캐시 디렉토리 (~/Documents/huggingface/...).
+    public static func cacheDirectory(for model: WhisperModelInfo) -> URL {
+        let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first
+            ?? URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent("Documents")
+        return documents
+            .appendingPathComponent("huggingface", isDirectory: true)
+            .appendingPathComponent("models", isDirectory: true)
+            .appendingPathComponent("argmaxinc", isDirectory: true)
+            .appendingPathComponent("whisperkit-coreml", isDirectory: true)
+            .appendingPathComponent(model.whisperKitName, isDirectory: true)
+    }
+
+    /// 모델이 사용자 기기에 이미 다운로드되어 있는지 검사.
+    /// 캐시 디렉토리에 .mlmodelc 번들이 하나라도 존재하면 true.
+    public static func isModelCached(_ model: WhisperModelInfo) -> Bool {
+        let dir = cacheDirectory(for: model)
+        let fm = FileManager.default
+        var isDir: ObjCBool = false
+        guard fm.fileExists(atPath: dir.path, isDirectory: &isDir), isDir.boolValue else {
+            return false
+        }
+        guard let contents = try? fm.contentsOfDirectory(atPath: dir.path) else {
+            return false
+        }
+        return contents.contains(where: { $0.hasSuffix(".mlmodelc") })
+    }
 }
