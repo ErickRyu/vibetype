@@ -1,37 +1,33 @@
 name: Release
 
-"on":
+on:
   push:
     tags:
-      - 'v*.*.*'
-  workflow_dispatch:
-    inputs:
-      version:
-        description: 'Version tag (예: v0.1.0)'
-        required: true
+      - 'v*'
 
 jobs:
   build:
     runs-on: macos-latest
-    timeout-minutes: 60
+    timeout-minutes: 90
     permissions:
       contents: write
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - name: Show toolchain info
+      - name: Show toolchain
         run: |
           xcodebuild -version
           swift --version
 
-      - name: Determine signing availability
+      - name: Determine signing
         id: signing
         env:
-          MACOS_CERTIFICATE_BASE64: ${{ secrets.MACOS_CERTIFICATE_BASE64 }}
-          DEVELOPER_ID_APP: ${{ secrets.DEVELOPER_ID_APP }}
+          CERT_B64: ${{ secrets.MACOS_CERTIFICATE_BASE64 }}
+          DEV_ID: ${{ secrets.DEVELOPER_ID_APP }}
         run: |
-          if [ -n "$MACOS_CERTIFICATE_BASE64" ] && [ -n "$DEVELOPER_ID_APP" ]; then
+          if [ -n "$CERT_B64" ] && [ -n "$DEV_ID" ]; then
             echo "has_signing=true" >> "$GITHUB_OUTPUT"
           else
             echo "has_signing=false" >> "$GITHUB_OUTPUT"
@@ -43,14 +39,14 @@ jobs:
       - name: Install build tools
         run: brew install xcodegen create-dmg
 
-      - name: Import Developer ID certificate
+      - name: Import certificate
         if: steps.signing.outputs.has_signing == 'true'
         uses: apple-actions/import-codesign-certs@v3
         with:
           p12-file-base64: ${{ secrets.MACOS_CERTIFICATE_BASE64 }}
           p12-password: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
 
-      - name: Build (signed + notarized)
+      - name: Build signed
         if: steps.signing.outputs.has_signing == 'true'
         env:
           DEVELOPER_ID_APP: ${{ secrets.DEVELOPER_ID_APP }}
@@ -59,44 +55,30 @@ jobs:
           APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
         run: ./scripts/release.sh --sign --notarize
 
-      - name: Build (unsigned, fallback)
+      - name: Build unsigned
         if: steps.signing.outputs.has_signing != 'true'
         run: ./scripts/release.sh
 
-      - name: Generate release notes from CHANGELOG
+      - name: Generate release notes
         id: notes
         env:
           HAS_SIGNING: ${{ steps.signing.outputs.has_signing }}
-          INPUT_VERSION: ${{ github.event.inputs.version }}
         run: |
-          VERSION="${GITHUB_REF_NAME:-$INPUT_VERSION}"
+          VERSION="$GITHUB_REF_NAME"
           VERSION_NUMBER="${VERSION#v}"
-          awk -v v="$VERSION_NUMBER" '
-            $0 ~ "^## \\[" v "\\]" { flag=1; next }
-            /^## / { flag=0 }
-            flag
-          ' CHANGELOG.md > release-notes.md
+          awk -v v="$VERSION_NUMBER" 'BEGIN{flag=0} { if (match($0, "^## \\[" v "\\]")) { flag=1; next } if (/^## /) { flag=0 } if (flag) print }' CHANGELOG.md > release-notes.md
           if [ ! -s release-notes.md ]; then
             echo "VibeType $VERSION" > release-notes.md
           fi
           if [ "$HAS_SIGNING" != "true" ]; then
-            cat >> release-notes.md <<'EOF'
-
----
-
-⚠️ **이 빌드는 코드 사인되지 않았습니다.** 처음 열 때 우클릭 → "열기" 또는 System Settings → Privacy & Security에서 "그래도 열기"를 눌러야 합니다.
-EOF
+            printf '\n---\n\n' >> release-notes.md
+            printf 'WARNING: 이 빌드는 코드 사인되지 않았습니다. 처음 열 때 우클릭 -> 열기 또는 System Settings -> Privacy & Security에서 그래도 열기를 눌러야 합니다.\n' >> release-notes.md
           fi
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
-      - name: Publish GitHub Release
+      - name: Publish release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ steps.notes.outputs.version }}
-          name: VibeType ${{ steps.notes.outputs.version }}
+          tag_name: ${{ github.ref_name }}
+          name: VibeType ${{ github.ref_name }}
           body_path: release-notes.md
           files: dist/VibeType.dmg
-          draft: false
-          prerelease: false
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
