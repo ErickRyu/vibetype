@@ -16,8 +16,6 @@ jobs:
     timeout-minutes: 60
     permissions:
       contents: write
-    env:
-      HAS_SIGNING: ${{ secrets.MACOS_CERTIFICATE_BASE64 != '' && secrets.DEVELOPER_ID_APP != '' }}
 
     steps:
       - uses: actions/checkout@v4
@@ -27,6 +25,18 @@ jobs:
           xcodebuild -version
           swift --version
 
+      - name: Determine signing availability
+        id: signing
+        env:
+          MACOS_CERTIFICATE_BASE64: ${{ secrets.MACOS_CERTIFICATE_BASE64 }}
+          DEVELOPER_ID_APP: ${{ secrets.DEVELOPER_ID_APP }}
+        run: |
+          if [ -n "$MACOS_CERTIFICATE_BASE64" ] && [ -n "$DEVELOPER_ID_APP" ]; then
+            echo "has_signing=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_signing=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Install Metal Toolchain
         run: xcodebuild -downloadComponent MetalToolchain || true
 
@@ -34,14 +44,14 @@ jobs:
         run: brew install xcodegen create-dmg
 
       - name: Import Developer ID certificate
-        if: env.HAS_SIGNING == 'true'
+        if: steps.signing.outputs.has_signing == 'true'
         uses: apple-actions/import-codesign-certs@v3
         with:
           p12-file-base64: ${{ secrets.MACOS_CERTIFICATE_BASE64 }}
           p12-password: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
 
       - name: Build (signed + notarized)
-        if: env.HAS_SIGNING == 'true'
+        if: steps.signing.outputs.has_signing == 'true'
         env:
           DEVELOPER_ID_APP: ${{ secrets.DEVELOPER_ID_APP }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
@@ -50,19 +60,26 @@ jobs:
         run: ./scripts/release.sh --sign --notarize
 
       - name: Build (unsigned, fallback)
-        if: env.HAS_SIGNING != 'true'
+        if: steps.signing.outputs.has_signing != 'true'
         run: ./scripts/release.sh
 
       - name: Generate release notes from CHANGELOG
         id: notes
+        env:
+          HAS_SIGNING: ${{ steps.signing.outputs.has_signing }}
+          INPUT_VERSION: ${{ github.event.inputs.version }}
         run: |
-          VERSION="${GITHUB_REF_NAME:-${{ github.event.inputs.version }}}"
+          VERSION="${GITHUB_REF_NAME:-$INPUT_VERSION}"
           VERSION_NUMBER="${VERSION#v}"
-          awk "/^## \\[$VERSION_NUMBER\\]/{flag=1; next} /^## /{flag=0} flag" CHANGELOG.md > release-notes.md
+          awk -v v="$VERSION_NUMBER" '
+            $0 ~ "^## \\[" v "\\]" { flag=1; next }
+            /^## / { flag=0 }
+            flag
+          ' CHANGELOG.md > release-notes.md
           if [ ! -s release-notes.md ]; then
             echo "VibeType $VERSION" > release-notes.md
           fi
-          if [ "${{ env.HAS_SIGNING }}" != "true" ]; then
+          if [ "$HAS_SIGNING" != "true" ]; then
             cat >> release-notes.md <<'EOF'
 
 ---
