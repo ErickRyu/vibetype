@@ -83,11 +83,25 @@ if [ $DO_NOTARIZE -eq 1 ]; then
     /usr/bin/ditto -c -k --keepParent "$APP_PATH" "$ZIP_PATH"
 
     echo "→ 노타라이즈 제출 (5~15분 소요)"
-    xcrun notarytool submit "$ZIP_PATH" \
+    SUBMIT_OUTPUT=$(xcrun notarytool submit "$ZIP_PATH" \
         --apple-id "$APPLE_ID" \
         --team-id "$APPLE_TEAM_ID" \
         --password "$APPLE_APP_PASSWORD" \
-        --wait
+        --output-format json \
+        --wait)
+    echo "$SUBMIT_OUTPUT"
+
+    SUBMIT_ID=$(echo "$SUBMIT_OUTPUT" | python3 -c "import sys, json; print(json.loads(sys.stdin.read()).get('id',''))" 2>/dev/null)
+    SUBMIT_STATUS=$(echo "$SUBMIT_OUTPUT" | python3 -c "import sys, json; print(json.loads(sys.stdin.read()).get('status',''))" 2>/dev/null)
+
+    if [ "$SUBMIT_STATUS" != "Accepted" ]; then
+        echo "❌ Notarization rejected (status=$SUBMIT_STATUS, id=$SUBMIT_ID). 자세한 로그:"
+        xcrun notarytool log "$SUBMIT_ID" \
+            --apple-id "$APPLE_ID" \
+            --team-id "$APPLE_TEAM_ID" \
+            --password "$APPLE_APP_PASSWORD" || true
+        exit 1
+    fi
 
     echo "→ Stapler"
     xcrun stapler staple "$APP_PATH"

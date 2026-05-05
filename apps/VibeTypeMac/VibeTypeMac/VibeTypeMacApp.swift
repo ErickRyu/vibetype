@@ -35,6 +35,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             await dictation.prefetchPermission()
         }
 
+        // Accessibility 권한도 첫 실행에 prompt — 받아쓰기의 ⌘V 시뮬레이션과
+        // 텍스트 다듬기의 AX 입력 둘 다에 필요. 권한 없으면 결과가 클립보드에만
+        // 남고 자동 입력이 안 된다.
+        if !AccessibilityService.hasPermission {
+            AccessibilityService.requestPermissionIfNeeded()
+        }
+
         // 캐시에 모델이 있으면 백그라운드에서 자동 로드 (콜드 스타트 단축).
         // 첫 실행(다운로드 미완료)에서는 자동 트리거하지 않음 — 사용자가 Settings에서 명시 시작.
         Task { @MainActor in
